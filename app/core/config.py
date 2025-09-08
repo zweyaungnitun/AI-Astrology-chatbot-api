@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 class Settings(BaseSettings):
@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     openrouter_model: str = "deepseek/deepseek-chat"
     
     # Clerk
-    firebase_secret_key: str
+    firebase_private_key: str
     firebase_project_id: str
     firebase_auth_domain: str
     
@@ -23,10 +23,12 @@ class Settings(BaseSettings):
     environment: str = "development"
     cors_origins: list = ["http://localhost:3000", "http://localhost:8000"]
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    # Use the new model_config for Pydantic V2
+    model_config = SettingsConfigDict(
+        env_file=".env.development",
+        env_file_encoding="utf-8",
+        case_sensitive=False
+    )
 
 # Create settings instance
 settings = Settings()

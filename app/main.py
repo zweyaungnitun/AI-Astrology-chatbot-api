@@ -119,10 +119,7 @@ async def health_check():
 
 # Include API routers
 app.include_router(auth.router, prefix=settings.API_V1_STR, tags=["Authentication"])
-app.include_router(users.router, prefix=settings.API_V1_STR, tags=["Users"])
-app.include_router(chat.router, prefix=settings.API_V1_STR, tags=["Chat"])
-app.include_router(charts.router, prefix=settings.API_V1_STR, tags=["Charts"])
-app.include_router(webhooks.router, prefix=settings.API_V1_STR, tags=["Webhooks"])
+
 
 # --- Development Debug Routes ---
 
