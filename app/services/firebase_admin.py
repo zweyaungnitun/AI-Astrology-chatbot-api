@@ -1,27 +1,40 @@
 import firebase_admin
 from firebase_admin import credentials, auth
 from firebase_admin.exceptions import FirebaseError
-
-from app.core.config import settings
-import logging      
+import logging
+import os
 
 logger = logging.getLogger(__name__)
 
+# Store the Firebase app instance globally
+firebase_app = None
+
 def initialize_firebase():
+    global firebase_app  # Important: use global keyword
+    
     try:
         if not firebase_admin._apps:
-            cred = credentials.Certificate(settings.FIREBASE_CONFIG)
-            firebase_admin.initialize_app(cred)
+            service_account_path = os.getenv(
+                'FIREBASE_SERVICE_ACCOUNT_PATH', 
+                'config/firebase-service-account.json'
+            )
+            
+            cred = credentials.Certificate(service_account_path)
+            firebase_app = firebase_admin.initialize_app(cred)
             logger.info("Firebase admin initialized successfully")
+        else:
+            firebase_app = firebase_admin.get_app()
+            
+        return firebase_app
+        
     except FirebaseError as e:
         logger.error(f"Failed to initialize Firebase admin: {e}")
         raise
-
-firebase_app=initialize_firebase()
-
-async def verify_firebase_token(id_token: str)-> dict:
+    
+async def verify_firebase_token(id_token: str) -> dict:
     try: 
-        decoded_token= auth.verify_id_token(id_token,app=firebase_app)
+        # Use the global firebase_app instance
+        decoded_token = auth.verify_id_token(id_token, app=firebase_app)
         return decoded_token
     except auth.ExpiredIdTokenError:
         logger.error("Firebase token has expired")
@@ -38,4 +51,9 @@ async def verify_firebase_token(id_token: str)-> dict:
         raise ValueError(f"Firebase error: {str(e)}")
     except Exception as e:
         raise ValueError(f"Unexpected error: {str(e)}")
-    
+
+# Initialize Firebase when this module is imported
+initialize_firebase()
+
+# Export the firebase_app so it can be imported
+__all__ = ['firebase_app', 'initialize_firebase', 'verify_firebase_token']

@@ -1,38 +1,64 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
+# app/core/config.py
+from pydantic import Field, AnyUrl
+from pydantic_settings import BaseSettings
+from typing import Optional, List
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 class Settings(BaseSettings):
-    # Database
-    database_url: str
+    # --- Application Core Settings ---
+    ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
+    DEBUG: bool = Field(default=False, env="DEBUG")
+    BACKEND_CORS_ORIGINS: List[str] = Field(default=["http://localhost:3000"], env="BACKEND_CORS_ORIGINS")
     
-    # Redis
-    redis_url: str
+    # --- Project Metadata ---
+    PROJECT_NAME: str = Field(default="AI Astrology Chatbot", env="PROJECT_NAME")
+    PROJECT_VERSION: str = Field(default="0.1.0", env="PROJECT_VERSION")
+    API_V1_STR: str = Field(default="/api", env="API_V1_STR")
     
-    # OpenRouter
-    openrouter_api_key: str
-    openrouter_api_base: str = "https://openrouter.ai/api/v1"
-    openrouter_model: str = "deepseek/deepseek-chat"
+    # --- Database Settings (PostgreSQL) ---
+    DATABASE_URL: str = Field(..., env="DATABASE_URL")
     
-    # Clerk
-    firebase_private_key: str
-    firebase_project_id: str
-    firebase_auth_domain: str
+    # --- Redis Settings ---
+    REDIS_URL: str = Field(default="redis://localhost:6379", env="REDIS_URL")
     
-    # Optional: Add other common settings
-    debug: bool = False
-    environment: str = "development"
-    cors_origins: list = ["http://localhost:3000", "http://localhost:8000"]
+    # --- Firebase Settings ---
+    FIREBASE_PROJECT_ID: str = Field(..., env="FIREBASE_PROJECT_ID")
+    FIREBASE_PRIVATE_KEY: str = Field(..., env="FIREBASE_PRIVATE_KEY")
+    FIREBASE_CLIENT_EMAIL: str = Field(..., env="FIREBASE_CLIENT_EMAIL")
+    FIREBASE_AUTH_DOMAIN: str = Field(..., env="FIREBASE_AUTH_DOMAIN")
+    FIREBASE_SERVICE_ACCOUNT_PATH: str = Field(..., env="FIREBASE_SERVICE_ACCOUNT_PATH")    
+    # --- OpenRouter API Settings ---
+    OPENROUTER_API_KEY: str = Field(..., env="OPENROUTER_API_KEY")
+    OPENROUTER_API_BASE: str = Field(default="https://openrouter.ai/api/v1", env="OPENROUTER_API_BASE")
+    OPENROUTER_MODEL: str = Field(default="deepseek/deepseek-chat", env="OPENROUTER_MODEL")
     
-    # Use the new model_config for Pydantic V2
-    model_config = SettingsConfigDict(
-        env_file=".env.development",
-        env_file_encoding="utf-8",
-        case_sensitive=False
-    )
+    # --- Encryption Settings ---
+    ENCRYPTION_SECRET_KEY: str = Field(..., env="ENCRYPTION_SECRET_KEY")
+    
+    # Derived properties
+    @property
+    def IS_PRODUCTION(self):
+        return self.ENVIRONMENT == "production"
+    
+    @property
+    def IS_DEVELOPMENT(self):
+        return self.ENVIRONMENT == "development"
+    
+    @property
+    def async_database_url(self):
+        """Ensure the DATABASE_URL uses the asyncpg driver."""
+        if self.DATABASE_URL.startswith("postgresql://"):
+            return self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return self.DATABASE_URL
 
-# Create settings instance
+    class Config:
+        case_sensitive = True
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
+# Create a global settings instance
 settings = Settings()
-
-
-def get_settings() -> Settings:
-    return Settings()

@@ -1,5 +1,5 @@
 # app/dependencies/auth.py
-from fastapi import Depends, HTTPException, status, Header
+from fastapi import Depends,APIRouter, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict, Any
 from functools import wraps
@@ -11,7 +11,7 @@ from firebase_admin.exceptions import FirebaseError
 from app.services.firebase_admin import firebase_app
 
 logger = logging.getLogger(__name__)
-
+router = APIRouter(prefix="/auth", tags=["auth"])
 # HTTP Bearer scheme for extracting tokens from Authorization header
 security = HTTPBearer(auto_error=False)
 
@@ -282,7 +282,6 @@ def require_role(required_role: str):
 async def test_authentication():
     """Test function to verify authentication is working."""
     try:
-        # This would be called with a real token in practice
         return {"status": "Authentication system initialized"}
     except Exception as e:
         return {"status": "Error", "message": str(e)}

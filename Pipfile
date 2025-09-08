@@ -16,7 +16,6 @@ python-dotenv = "*"
 python-jose = {extras = ["cryptography"], version = "*"}
 firebase-admin = "*"
 slowapi = "*"
-sqlmodel = "*"
 asyncpg = "*"
 sqlalchemy = {extras = ["asyncio"], version = "*"}
 alembic = "*"

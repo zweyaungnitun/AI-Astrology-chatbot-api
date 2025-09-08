@@ -1,6 +1,6 @@
 # app/main.py
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -11,7 +11,7 @@ from app.core.config import settings
 
 from app.database.session import create_db_and_tables, get_db_session
 
-from app.routers import auth, users, chat, charts, webhooks
+from app.routers import auth
 
 
 @asynccontextmanager
