@@ -1,148 +1,288 @@
 # app/main.py
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
+from fastapi.encoders import jsonable_encoder
+import logging
+import time
+from typing import Optional
 
+# Import core configuration
 from app.core.config import settings
 
-from app.database.session import create_db_and_tables, get_db_session
+# Import database setup
+from app.database.session import create_db_and_tables, engine
 
-from app.routers import auth
+# Import routers
+from app.routers import auth, users
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO if settings.IS_PRODUCTION else logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+    ]
+)
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Lifespan event handler for FastAPI.
-    This code runs once on startup and once on shutdown.
+    Runs on startup and shutdown.
     """
-    # --- Startup Code ---
-    print("Starting up...")
-    print(f"Environment: {settings.ENVIRONMENT}")
+    # Startup code
+    startup_message = f"""
+    🚀 Starting {settings.PROJECT_NAME} v{settings.PROJECT_VERSION}
+    📊 Environment: {settings.ENVIRONMENT}
+    🔗 Database: {settings.DATABASE_URL.split('@')[-1] if '@' in settings.DATABASE_URL else 'Local'}
+    🌐 CORS Origins: {settings.BACKEND_CORS_ORIGINS}
+    """
+    logger.info(startup_message)
     
-    # Create database tables (if they don't exist)
-    await create_db_and_tables()
-    print("Database tables verified/created.")
+    # Create database tables
+    try:
+        await create_db_and_tables()
+        logger.info("✅ Database tables initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Database initialization failed: {str(e)}")
+        raise
     
-    # You could add a connection test for Redis here if needed
-    # await test_redis_connection()
+    # Initialize other services here if needed
+    # e.g., Redis connection, Firebase admin, etc.
     
-    yield  # The application runs here
+    yield  # Application runs here
     
-    # --- Shutdown Code ---
-    print("Shutting down...")
-    # Clean up resources if necessary (e.g., close Redis pool)
-    # await close_redis_connection()
+    # Shutdown code
+    logger.info("🛑 Shutting down application...")
+    
+    # Clean up resources
+    try:
+        await engine.dispose()
+        logger.info("✅ Database engine disposed successfully")
+    except Exception as e:
+        logger.error(f"❌ Error disposing database engine: {str(e)}")
 
-# Initialize the FastAPI application with lifespan events
+# Initialize FastAPI with lifespan
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.PROJECT_VERSION,
-    description="A conversational AI chatbot that provides astrological insights based on user birth charts.",
+    description="AI Astrology Chatbot API - Get personalized astrological insights based on your birth chart",
+    docs_url="/docs" if settings.IS_DEVELOPMENT else None,
+    redoc_url="/redoc" if settings.IS_DEVELOPMENT else None,
+    openapi_url="/openapi.json" if settings.IS_DEVELOPMENT else None,
     lifespan=lifespan,
-
 )
 
-# --- Middleware ---
+# Middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Middleware to log all requests."""
+    start_time = time.time()
+    
+    # Skip logging for health checks and docs
+    if request.url.path in ["/health", "/docs", "/redoc", "/openapi.json"]:
+        response = await call_next(request)
+        return response
+    
+    logger.info(f"📥 Incoming request: {request.method} {request.url.path}")
+    
+    try:
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        
+        logger.info(
+            f"📤 Response: {request.method} {request.url.path} "
+            f"-> {response.status_code} in {process_time:.3f}s"
+        )
+        
+        # Add process time to headers
+        response.headers["X-Process-Time"] = str(process_time)
+        return response
+        
+    except Exception as e:
+        process_time = time.time() - start_time
+        logger.error(
+            f"💥 Error: {request.method} {request.url.path} "
+            f"-> Exception: {str(e)} in {process_time:.3f}s"
+        )
+        raise
 
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Process-Time"],
 )
 
-
-# --- Exception Handlers ---
-
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
-    """
-    Custom handler for Pydantic validation errors.
-    Provides cleaner error messages for invalid requests.
-    """
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle Pydantic validation errors with detailed messages."""
+    logger.warning(f"Validation error: {exc.errors()}")
+    
     return JSONResponse(
-        status_code=422,
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
-            "detail": "Invalid request data.",
-            "errors": exc.errors(),
+            "detail": "Invalid request data",
+            "errors": jsonable_encoder(exc.errors()),
         },
     )
 
-# --- Include Routers (API Endpoints) ---
+@app.exception_handler(404)
+async def not_found_exception_handler(request: Request, exc: Exception):
+    """Handle 404 errors."""
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"detail": "Endpoint not found"},
+    )
 
-# Health check endpoint
-@app.get("/", tags=["Root"])
+@app.exception_handler(500)
+async def internal_server_error_handler(request: Request, exc: Exception):
+    """Handle 500 errors gracefully."""
+    logger.error(f"Internal server error: {str(exc)}")
+    
+    error_detail = "Internal server error" if settings.IS_PRODUCTION else str(exc)
+    
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": error_detail},
+    )
+
+# Health check and root endpoints
+@app.get("/", include_in_schema=False)
 async def root():
-    """Basic health check endpoint."""
+    """Root endpoint with basic information."""
     return {
-        "message": f"Welcome to the {settings.PROJECT_NAME} API",
+        "message": f"Welcome to {settings.PROJECT_NAME} API",
         "version": settings.PROJECT_VERSION,
         "environment": settings.ENVIRONMENT,
-        "docs": "/docs",
+        "docs": "/docs" if settings.IS_DEVELOPMENT else None,
+        "health": "/health",
     }
 
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Comprehensive health check endpoint for monitoring."""
+    from sqlmodel import text
     from app.services.redis_service import redis_pool
-    from sqlmodel import text, Session
+    
+    health_status = {
+        "status": "healthy",
+        "service": settings.PROJECT_NAME,
+        "version": settings.PROJECT_VERSION,
+        "timestamp": time.time(),
+        "components": {}
+    }
     
     # Check database connection
-    db_healthy = False
     try:
-        async with Session() as session:
-            await session.exec(text("SELECT 1"))
-            db_healthy = True
+        async with engine.begin() as conn:
+            await conn.exec(text("SELECT 1"))
+        health_status["components"]["database"] = {"status": "healthy", "message": "Connected"}
     except Exception as e:
-        print(f"Database health check failed: {e}")
+        health_status["components"]["database"] = {"status": "unhealthy", "message": str(e)}
+        health_status["status"] = "degraded"
     
-    # Check Redis connection
-    redis_healthy = False
-    try:
-        await redis_pool.ping()
-        redis_healthy = True
-    except Exception as e:
-        print(f"Redis health check failed: {e}")
+
+    if hasattr(settings, 'REDIS_URL') and settings.REDIS_URL:
+        try:
+            await redis_pool.ping()
+            health_status["components"]["redis"] = {"status": "healthy", "message": "Connected"}
+        except Exception as e:
+            health_status["components"]["redis"] = {"status": "unhealthy", "message": str(e)}
+            health_status["status"] = "degraded"
     
+    # Check Firebase connection (if configured)
+    if hasattr(settings, 'FIREBASE_PROJECT_ID') and settings.FIREBASE_PROJECT_ID:
+        try:
+            # Simple check to see if Firebase credentials are loadable
+            from app.services.firebase_admin import firebase_app
+            health_status["components"]["firebase"] = {"status": "healthy", "message": "Initialized"}
+        except Exception as e:
+            health_status["components"]["firebase"] = {"status": "unhealthy", "message": str(e)}
+            health_status["status"] = "degraded"
+    
+    return health_status
+
+@app.get("/info", tags=["Info"])
+async def system_info():
+    """Get system information and configuration (without sensitive data)."""
     return {
-        "status": "healthy" if db_healthy and redis_healthy else "degraded",
-        "database": "connected" if db_healthy else "disconnected",
-        "redis": "connected" if redis_healthy else "disconnected",
-        "timestamp": "2024-09-01T00:00:00Z", # You can use datetime.utcnow().isoformat()
+        "name": settings.PROJECT_NAME,
+        "version": settings.PROJECT_VERSION,
+        "environment": settings.ENVIRONMENT,
+        "debug": settings.DEBUG,
+        "cors_origins": settings.BACKEND_CORS_ORIGINS,
+        "api_version": settings.API_V1_STR,
     }
 
-# Include API routers
+# Include all routers
 app.include_router(auth.router, prefix=settings.API_V1_STR, tags=["Authentication"])
+app.include_router(users.router, prefix=settings.API_V1_STR, tags=["Users"])
 
 
-# --- Development Debug Routes ---
-
+# Development-only endpoints
 if settings.IS_DEVELOPMENT:
     @app.get("/debug/config", tags=["Debug"])
     async def debug_config():
-        """Display current configuration (ONLY in development)."""
+        """Display safe configuration values (development only)."""
         return {
             "environment": settings.ENVIRONMENT,
             "debug": settings.DEBUG,
-            "database_url": str(settings.DATABASE_URL).split('@')[0] + '@***',  # Mask password
-            "redis_url": settings.REDIS_URL.split('@')[0] + '@***' if '@' in settings.REDIS_URL else settings.REDIS_URL,
-            "firebase_project_id": settings.FIREBASE_PROJECT_ID,
-            "openrouter_model": settings.OPENROUTER_MODEL,
+            "project_name": settings.PROJECT_NAME,
+            "project_version": settings.PROJECT_VERSION,
+            "database": f"PostgreSQL ({'async' if '+asyncpg' in settings.DATABASE_URL else 'sync'})",
+            "redis_configured": bool(settings.REDIS_URL),
+            "firebase_configured": bool(settings.FIREBASE_PROJECT_ID),
+            "openrouter_configured": bool(settings.OPENROUTER_API_KEY),
+            "cors_origins": settings.BACKEND_CORS_ORIGINS,
         }
+    
+    @app.get("/debug/routes", tags=["Debug"])
+    async def debug_routes():
+        """List all available API routes (development only)."""
+        routes = []
+        for route in app.routes:
+            if hasattr(route, "methods") and hasattr(route, "path"):
+                routes.append({
+                    "path": route.path,
+                    "methods": list(route.methods),
+                    "name": route.name if hasattr(route, "name") else None,
+                })
+        return {"routes": routes}
 
-# This allows running the app directly with: python -m app.main
+# Global catch-all for undefined routes
+@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"], include_in_schema=False)
+async def catch_all(path: str):
+    """Catch-all for undefined routes."""
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"detail": f"Endpoint '{path}' not found"},
+    )
+
 if __name__ == "__main__":
     import uvicorn
+    
+    # Determine reload setting based on environment
+    reload = settings.IS_DEVELOPMENT
+    
+    # Determine log level based on environment
+    log_level = "debug" if settings.IS_DEVELOPMENT else "info"
+    
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=settings.IS_DEVELOPMENT,  # Auto-reload in development
-        log_level="debug" if settings.IS_DEVELOPMENT else "info",
+        reload=reload,
+        log_level=log_level,
+        # Timeout settings for production
+        timeout_keep_alive=30 if settings.IS_PRODUCTION else 5,
+        # Worker settings for production
+        workers=4 if settings.IS_PRODUCTION else 1,
     )
