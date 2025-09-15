@@ -1,4 +1,3 @@
-# app/routers/admin.py
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlmodel.ext.asyncio.session import AsyncSession
 from typing import List, Optional, Dict, Any

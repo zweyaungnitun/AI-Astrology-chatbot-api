@@ -1,5 +1,5 @@
 # app/schemas/user.py
-from sqlmodel import SQLModel, Field, Column, JSON
+from sqlmodel import SQLModel, Field, Column, JSON,Relationship
 from typing import Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -12,6 +12,7 @@ class UserBase(SQLModel):
     is_active: bool = Field(default=True, description="Whether user account is active")
     subscription_tier: str = Field(default="free", description="User's subscription level")
 
+
 class User(UserBase, table=True):
     id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
     display_name: Optional[str] = Field(default=None, description="User's display name")
@@ -22,7 +23,6 @@ class User(UserBase, table=True):
     birth_time: Optional[str] = Field(default=None, description="Encrypted birth time")
     birth_location: Optional[str] = Field(default=None, description="Encrypted birth location")
     
-    admin_profile: Optional["AdminUser"] = Relationship(back_populates="user")
 
     # Preferences
     preferences: Dict[str, Any] = Field(
@@ -37,6 +37,7 @@ class User(UserBase, table=True):
     last_login_at: Optional[datetime] = Field(default=None)
     login_count: int = Field(default=0, description="Number of times user has logged in")
 
+    admin_profile: Optional["AdminUser"] = Relationship(back_populates="user")
     class Config:
         table_name = "users"
 

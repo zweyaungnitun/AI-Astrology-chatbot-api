@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 fastapi = "*"
 uvicorn = "*"
-vedastro = "*"
 redis = "*"
 pydantic = "*"
 langchain = "*"
@@ -20,6 +19,7 @@ asyncpg = "*"
 sqlalchemy = {extras = ["asyncio"], version = "*"}
 alembic = "*"
 psycopg2-binary = "*"
+vedastro = "*"
 
 [dev-packages]
 

@@ -8,17 +8,10 @@ from fastapi.encoders import jsonable_encoder
 import logging
 import time
 from typing import Optional
-
-# Import core configuration
 from app.core.config import settings
-
-# Import database setup
 from app.database.session import create_db_and_tables, engine
+from app.routers import users,admin,charts
 
-# Import routers
-from app.routers import auth, users
-
-# Configure logging
 logging.basicConfig(
     level=logging.INFO if settings.IS_PRODUCTION else logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -154,7 +147,6 @@ async def internal_server_error_handler(request: Request, exc: Exception):
         content={"detail": error_detail},
     )
 
-# Health check and root endpoints
 @app.get("/", include_in_schema=False)
 async def root():
     """Root endpoint with basic information."""
@@ -197,11 +189,8 @@ async def health_check():
         except Exception as e:
             health_status["components"]["redis"] = {"status": "unhealthy", "message": str(e)}
             health_status["status"] = "degraded"
-    
-    # Check Firebase connection (if configured)
     if hasattr(settings, 'FIREBASE_PROJECT_ID') and settings.FIREBASE_PROJECT_ID:
         try:
-            # Simple check to see if Firebase credentials are loadable
             from app.services.firebase_admin import firebase_app
             health_status["components"]["firebase"] = {"status": "healthy", "message": "Initialized"}
         except Exception as e:
@@ -222,12 +211,11 @@ async def system_info():
         "api_version": settings.API_V1_STR,
     }
 
-# Include all routers
-app.include_router(auth.router, prefix=settings.API_V1_STR, tags=["Authentication"])
 app.include_router(users.router, prefix=settings.API_V1_STR, tags=["Users"])
+app.include_router(charts.router, prefix=settings.API_V1_STR, tags=["Charts"])
+app.include_router(admin.router, prefix=settings.API_V1_STR, tags=["Admin"])
 
 
-# Development-only endpoints
 if settings.IS_DEVELOPMENT:
     @app.get("/debug/config", tags=["Debug"])
     async def debug_config():
@@ -256,8 +244,6 @@ if settings.IS_DEVELOPMENT:
                     "name": route.name if hasattr(route, "name") else None,
                 })
         return {"routes": routes}
-
-# Global catch-all for undefined routes
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"], include_in_schema=False)
 async def catch_all(path: str):
     """Catch-all for undefined routes."""
@@ -268,11 +254,9 @@ async def catch_all(path: str):
 
 if __name__ == "__main__":
     import uvicorn
-    
-    # Determine reload setting based on environment
+
     reload = settings.IS_DEVELOPMENT
     
-    # Determine log level based on environment
     log_level = "debug" if settings.IS_DEVELOPMENT else "info"
     
     uvicorn.run(
@@ -281,8 +265,6 @@ if __name__ == "__main__":
         port=8000,
         reload=reload,
         log_level=log_level,
-        # Timeout settings for production
         timeout_keep_alive=30 if settings.IS_PRODUCTION else 5,
-        # Worker settings for production
         workers=4 if settings.IS_PRODUCTION else 1,
     )
