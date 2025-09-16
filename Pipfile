@@ -20,8 +20,11 @@ sqlalchemy = {extras = ["asyncio"], version = "*"}
 alembic = "*"
 psycopg2-binary = "*"
 vedastro = "*"
+langcheck = "*"
+tiktoken = "*"
 
 [dev-packages]
+
 
 [requires]
 python_version = "3.11"
