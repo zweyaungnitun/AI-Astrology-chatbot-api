@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 fastapi = "*"
 uvicorn = "*"
-redis = "*"
 pydantic = "*"
 langchain = "*"
 langchain-community = "*"
@@ -22,9 +21,11 @@ psycopg2-binary = "*"
 vedastro = "*"
 langcheck = "*"
 tiktoken = "*"
+langchain-openai = "*"
+redis = "*"
+hiredis = "*"
 
 [dev-packages]
-
 
 [requires]
 python_version = "3.11"

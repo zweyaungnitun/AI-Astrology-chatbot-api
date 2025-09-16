@@ -36,6 +36,16 @@ class Settings(BaseSettings):
     OPENROUTER_API_BASE: str = Field(default="https://openrouter.ai/api/v1", env="OPENROUTER_API_BASE")
     OPENROUTER_MODEL: str = Field(default="deepseek/deepseek-chat", env="OPENROUTER_MODEL")
     
+    # Redis Settings
+    REDIS_URL: str = Field(default="redis://localhost:6379", env="REDIS_URL")
+    REDIS_MAX_CONNECTIONS: int = Field(default=10, env="REDIS_MAX_CONNECTIONS")
+    REDIS_SESSION_TTL: int = Field(default=86400, env="REDIS_SESSION_TTL")  # 24 hours
+    REDIS_CACHE_TTL: int = Field(default=3600, env="REDIS_CACHE_TTL")  # 1 hour
+    
+    # Rate Limiting
+    RATE_LIMIT_REQUESTS: int = Field(default=100, env="RATE_LIMIT_REQUESTS")
+    RATE_LIMIT_WINDOW: int = Field(default=3600, env="RATE_LIMIT_WINDOW") 
+    
     # --- Encryption Settings ---
     ENCRYPTION_SECRET_KEY: str = Field(..., env="ENCRYPTION_SECRET_KEY")
     

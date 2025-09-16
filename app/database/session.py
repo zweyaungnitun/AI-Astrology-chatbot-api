@@ -31,3 +31,6 @@ async def create_db_and_tables():
         await conn.run_sync(User.metadata.create_all)
         await conn.run_sync(AdminUser.metadata.create_all)
         await conn.run_sync(Chart.metadata.create_all)
+
+     # Initialize Redis
+    await initialize_redis()

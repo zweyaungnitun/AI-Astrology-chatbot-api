@@ -12,7 +12,7 @@ from app.models.chat import (
     MessageRole, ChatSessionResponse, ChatMessageResponse
 )
 from app.services.ai_service import get_ai_response  # We'll create this next
-
+from app.services.ai_service import ai_service
 logger = logging.getLogger(__name__)
 
 class ChatService:
@@ -266,3 +266,86 @@ class ChatService:
         except Exception as e:
             logger.error(f"Error processing chat message: {str(e)}")
             return None
+
+    async def process_chat_message(
+    self, 
+    user_id: UUID, 
+    message: str, 
+    session_id: Optional[UUID] = None,
+    temperature: float = 0.7,
+    max_tokens: int = 500,
+    evaluate: bool = False
+) -> Optional[Dict[str, Any]]:
+    """Process chat message with LangChain and LangCheck integration."""
+    start_time = time.time()
+    
+    try:
+        # Get or create chat session
+        if session_id:
+            chat_session = await self.get_chat_session(session_id, user_id)
+            if not chat_session:
+                return None
+        else:
+            title = message[:50] + "..." if len(message) > 50 else message
+            chat_session = await self.create_chat_session(
+                user_id, 
+                ChatSessionCreate(title=title)
+            )
+            if not chat_session:
+                return None
+
+        # Add user message to session
+        user_message = await self.add_message_to_session(
+            chat_session.id,
+            ChatMessageCreate(content=message, role=MessageRole.USER)
+        )
+        if not user_message:
+            return None
+
+        # Get user context
+        from app.services.user_service import UserService
+        user_service = UserService(self.db)
+        birth_data = await user_service.get_birth_data(user_id)
+
+        # Get chat history
+        chat_history = await self.get_session_messages(chat_session.id)
+        
+        # Get AI response using LangChain
+        ai_response = await ai_service.get_ai_response(
+            user_message=message,
+            chat_history=chat_history,
+            birth_data=birth_data,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            evaluate=evaluate
+        )
+
+        # Add AI response to session
+        ai_message = await self.add_message_to_session(
+            chat_session.id,
+            ChatMessageCreate(
+                content=ai_response["content"],
+                role=MessageRole.ASSISTANT,
+                tokens=ai_response.get("tokens")
+            ),
+            metadata={
+                "model": ai_response.get("model"),
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "processing_time": ai_response.get("processing_time"),
+                "evaluation": ai_response.get("evaluation", {})
+            }
+        )
+
+        return {
+            "user_message": user_message,
+            "ai_message": ai_message,
+            "chat_session": chat_session,
+            "tokens_used": ai_response.get("tokens"),
+            "processing_time": ai_response.get("processing_time"),
+            "evaluation": ai_response.get("evaluation")
+        }
+        
+    except Exception as e:
+        logger.error(f"Chat processing error: {str(e)}")
+        return None
