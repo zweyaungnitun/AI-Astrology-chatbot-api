@@ -10,7 +10,7 @@ import time
 from typing import Optional
 from app.core.config import settings
 from app.database.session import create_db_and_tables, engine
-from app.routers import users,admin,charts
+from app.routers import users,admin,charts,chat
 
 logging.basicConfig(
     level=logging.INFO if settings.IS_PRODUCTION else logging.DEBUG,
@@ -214,7 +214,7 @@ async def system_info():
 app.include_router(users.router, prefix=settings.API_V1_STR, tags=["Users"])
 app.include_router(charts.router, prefix=settings.API_V1_STR, tags=["Charts"])
 app.include_router(admin.router, prefix=settings.API_V1_STR, tags=["Admin"])
-
+app.include_router(chat.router, prefix=settings.API_V1_STR, tags=["Chat"])
 
 if settings.IS_DEVELOPMENT:
     @app.get("/debug/config", tags=["Debug"])
@@ -251,6 +251,15 @@ async def catch_all(path: str):
         status_code=status.HTTP_404_NOT_FOUND,
         content={"detail": f"Endpoint '{path}' not found"},
     )
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await create_db_and_tables()
+    
+    yield
+    
+    # Shutdown
+    await redis_service.close()
 
 if __name__ == "__main__":
     import uvicorn

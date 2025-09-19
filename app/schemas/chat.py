@@ -1,9 +1,10 @@
 # app/models/chat.py
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field, Relationship, Column
 from typing import Optional, List, Dict, Any
 from uuid import UUID, uuid4
 from datetime import datetime
 from enum import Enum
+from sqlalchemy import JSON
 
 class MessageRole(str, Enum):
     USER = "user"
@@ -38,7 +39,7 @@ class ChatMessage(ChatMessageBase, table=True):
     # Additional metadata
     model: Optional[str] = Field(default=None, description="AI model used for response")
     temperature: Optional[float] = Field(default=None, description="Temperature setting for AI")
-    metadata: Dict[str, Any] = Field(default_factory=dict, sa_column=Field(JSON))
+    message_metadata: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     
     # Relationships
     chat_session: Optional[ChatSession] = Relationship(back_populates="messages")

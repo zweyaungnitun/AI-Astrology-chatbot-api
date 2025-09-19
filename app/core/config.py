@@ -35,7 +35,8 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = Field(..., env="OPENROUTER_API_KEY")
     OPENROUTER_API_BASE: str = Field(default="https://openrouter.ai/api/v1", env="OPENROUTER_API_BASE")
     OPENROUTER_MODEL: str = Field(default="deepseek/deepseek-chat", env="OPENROUTER_MODEL")
-    
+    OPENROUTER_HTTP_REFERER: str = Field(default="https://openrouter.ai", env="OPENROUTER_HTTP_REFERER")
+    OPENROUTER_APP_TITLE: str = Field(default="OpenRouter", env="OPENROUTER_APP_TITLE")
     # Redis Settings
     REDIS_URL: str = Field(default="redis://localhost:6379", env="REDIS_URL")
     REDIS_MAX_CONNECTIONS: int = Field(default=10, env="REDIS_MAX_CONNECTIONS")

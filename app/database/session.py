@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.schemas.user import User
 from app.schemas.admin import AdminUser
 from app.schemas.chart import Chart
+from app.services.redis_service import initialize_redis
 # Create async engine
 engine = create_async_engine(
     settings.DATABASE_URL,
