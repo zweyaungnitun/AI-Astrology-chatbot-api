@@ -1,13 +1,12 @@
-# app/database/session.py
 from sqlmodel import create_engine, SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
-from app.schemas.user import User
-from app.schemas.admin import AdminUser
-from app.schemas.chart import Chart
+from app.models.user import User
+from app.models.admin import AdminUser
+from app.models.chart import Chart
 from app.services.redis_service import initialize_redis
 # Create async engine
 engine = create_async_engine(

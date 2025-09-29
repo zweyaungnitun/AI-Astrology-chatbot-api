@@ -1,47 +1,15 @@
-# app/schemas/user.py
-from sqlmodel import SQLModel, Field, Column, JSON,Relationship
+from sqlmodel import SQLModel, Field
 from typing import Optional, Dict, Any
 from datetime import datetime
-from uuid import UUID, uuid4
-import json
+from uuid import UUID
 
-class UserBase(SQLModel):
-    firebase_uid: str = Field(unique=True, index=True, description="Firebase User ID")
-    email: str = Field(unique=True, index=True, description="User's email address")
-    email_verified: bool = Field(default=False, description="Whether email is verified")
-    is_active: bool = Field(default=True, description="Whether user account is active")
-    subscription_tier: str = Field(default="free", description="User's subscription level")
-
-
-class User(UserBase, table=True):
-    id: Optional[UUID] = Field(default_factory=uuid4, primary_key=True)
-    display_name: Optional[str] = Field(default=None, description="User's display name")
-    photo_url: Optional[str] = Field(default=None, description="Profile photo URL")
-    
-    # Birth data (encrypted in production)
-    birth_date: Optional[str] = Field(default=None, description="Encrypted birth date")
-    birth_time: Optional[str] = Field(default=None, description="Encrypted birth time")
-    birth_location: Optional[str] = Field(default=None, description="Encrypted birth location")
-    
-
-    # Preferences
-    preferences: Dict[str, Any] = Field(
-        default_factory=dict,
-        sa_column=Column(JSON),
-        description="User preferences and settings"
-    )
-    
-    # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-    last_login_at: Optional[datetime] = Field(default=None)
-    login_count: int = Field(default=0, description="Number of times user has logged in")
-
-    admin_profile: Optional["AdminUser"] = Relationship(back_populates="user")
-    class Config:
-        table_name = "users"
+# --- Input Schemas ---
 
 class UserCreate(SQLModel):
+    """
+    Schema for creating a new user.
+    Represents the data received in a POST request.
+    """
     firebase_uid: str
     email: str
     display_name: Optional[str] = None
@@ -49,6 +17,11 @@ class UserCreate(SQLModel):
     email_verified: bool = False
 
 class UserUpdate(SQLModel):
+    """
+    Schema for updating an existing user.
+    Represents the data received in a PUT or PATCH request.
+    All fields are optional.
+    """
     display_name: Optional[str] = None
     photo_url: Optional[str] = None
     preferences: Optional[Dict[str, Any]] = None
@@ -56,7 +29,14 @@ class UserUpdate(SQLModel):
     birth_time: Optional[str] = None
     birth_location: Optional[str] = None
 
+
+# --- Output Schemas ---
+
 class UserResponse(SQLModel):
+    """
+    Schema for returning user data in an API response.
+    This is the public representation of a user.
+    """
     id: UUID
     firebase_uid: str
     email: str
@@ -65,11 +45,15 @@ class UserResponse(SQLModel):
     subscription_tier: str
     display_name: Optional[str] = None
     photo_url: Optional[str] = None
-    has_birth_data: bool = Field(description="Whether user has provided birth data")
+    has_birth_data: bool = Field(description="Computed field: True if user has provided birth data")
     created_at: datetime
     updated_at: datetime
     last_login_at: Optional[datetime] = None
     login_count: int
 
 class UserWithPreferences(UserResponse):
-    preferences: Dict[str, Any] = Field(default_factory=dict)
+    """
+    Extends UserResponse to include the user's preferences.
+    Used for endpoints where detailed settings are required.
+    """
+    preferences: Dict[str, Any]

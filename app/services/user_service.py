@@ -5,7 +5,8 @@ from typing import Optional, Dict, Any, List
 from uuid import UUID
 import logging
 from datetime import datetime
-from app.schemas.user import User, UserCreate, UserUpdate, UserResponse
+from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.models.user import User
 from app.utils.encryption import encrypt_data, decrypt_data
 
 logger = logging.getLogger(__name__)

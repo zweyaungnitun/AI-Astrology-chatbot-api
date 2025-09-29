@@ -45,7 +45,7 @@ class AIService:
             
             result = {
                 "content": response,
-                "model": "openrouter",  # Will be overridden by actual model
+                "model": "openrouter",
                 "tokens": token_count,
                 "processing_time": processing_time,
                 "timestamp": datetime.now().isoformat()

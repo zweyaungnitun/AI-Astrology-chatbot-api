@@ -7,10 +7,11 @@ import logging
 from datetime import datetime, timedelta
 
 from app.schemas.admin import (
-    AdminUser, AdminUserCreate, AdminUserUpdate, AdminAuditLog, 
-    SystemSettings, AdminRole, AdminPermission
+    AdminUserCreate, AdminUserUpdate,
+    AdminRole, AdminPermission
 )
-from app.schemas.user import User
+from app.models.admin import AdminUser, AdminAuditLog, SystemSettings
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,8 @@ from uuid import UUID
 import logging
 from datetime import datetime
 
-from app.schemas.chart import Chart, ChartCreate, ChartUpdate
+from app.schemas.chart import ChartCreate, ChartUpdate
+from app.models.chart import Chart
 from app.services.astrology_service import AstrologyService, ChartCalculationRequest
 
 logger = logging.getLogger(__name__)

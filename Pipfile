@@ -24,6 +24,9 @@ tiktoken = "*"
 langchain-openai = "*"
 redis = "*"
 hiredis = "*"
+transformers = "*"
+torch = "*"
+accelerate = "*"
 
 [dev-packages]
 

@@ -13,8 +13,7 @@ from app.dependencies.admin import (
 from app.database.session import get_db_session
 from app.services.admin_service import AdminService
 from app.schemas.admin import (
-    AdminUserCreate, AdminUserUpdate, AdminUserResponse, 
-    AdminPermission, AdminRole, SystemSettings
+    AdminUserCreate, AdminUserUpdate, AdminUserResponse
 )
 from app.services.user_service import UserService
 

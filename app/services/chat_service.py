@@ -8,10 +8,10 @@ from datetime import datetime
 import time
 
 from app.schemas.chat import (
-    ChatSession, ChatMessage, ChatSessionCreate, ChatMessageCreate,
+    ChatSessionCreate, ChatMessageCreate,
     MessageRole, ChatSessionResponse, ChatMessageResponse
 )
-from app.services.ai_service import get_ai_response  # We'll create this next
+from app.models.chat import ChatSession, ChatMessage
 from app.services.ai_service import ai_service
 logger = logging.getLogger(__name__)
 
