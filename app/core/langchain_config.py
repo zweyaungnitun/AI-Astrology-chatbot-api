@@ -4,7 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough, RunnableConfig
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.callbacks import AsyncCallbackHandler
-from langchain.memory import RedisChatMessageHistory
+from langchain_community.chat_message_histories import RedisChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 from typing import Optional, Dict, Any, List, AsyncGenerator
 from app.core.config import settings

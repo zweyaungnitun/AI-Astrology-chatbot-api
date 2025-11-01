@@ -18,17 +18,25 @@ asyncpg = "*"
 sqlalchemy = {extras = ["asyncio"], version = "*"}
 alembic = "*"
 psycopg2-binary = "*"
-vedastro = "*"
 langcheck = "*"
 tiktoken = "*"
 langchain-openai = "*"
 redis = "*"
 hiredis = "*"
-transformers = "*"
-torch = "*"
 accelerate = "*"
+vedastro = "*"
+numpy = "<2"
+torch = "*"
+transformers = "*"
+aiosqlite = "*"
+pytest-asyncio = "*"
+pytz = "*"
 
 [dev-packages]
+pytest-asyncio = "*"
+pytest-mock = "*"
+pytest = "*"
+httpx = "*"
 
 [requires]
 python_version = "3.11"

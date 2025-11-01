@@ -33,7 +33,7 @@ class AdminService:
             if existing_admin:
                 raise ValueError("User is already an admin")
             
-            admin_user = AdminUser(**admin_data.dict())
+            admin_user = AdminUser(**admin_data.model_dump())
             self.db.add(admin_user)
             await self.db.commit()
             await self.db.refresh(admin_user)
@@ -82,7 +82,7 @@ class AdminService:
             if not admin_user:
                 return None
 
-            update_dict = update_data.dict(exclude_unset=True)
+            update_dict = update_data.model_dump(exclude_unset=True)
             for field, value in update_dict.items():
                 setattr(admin_user, field, value)
             

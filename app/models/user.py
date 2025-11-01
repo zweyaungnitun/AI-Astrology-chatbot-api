@@ -38,4 +38,6 @@ class User(SQLModel, table=True):
     login_count: int = Field(default=0, description="Number of times user has logged in")
 
     # Relationships to other tables
-    # admin_profile: Optional["AdminUser"] = Relationship(back_populates="user")
+    admin_profile: Optional["AdminUser"] = Relationship(back_populates="user")
+    chat_sessions: List["ChatSession"] = Relationship(back_populates="user")
+    charts: List["Chart"] = Relationship(back_populates="user")

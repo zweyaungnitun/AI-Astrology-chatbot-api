@@ -61,5 +61,5 @@ class Chart(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     calculation_time: Optional[float] = Field(default=None, description="Time taken to calculate (seconds)")
 
-    # To enable this relationship, the User model needs a 'charts' field.
-    # user: Optional["User"] = Relationship(back_populates="charts")
+    # Relationships
+    user: Optional["User"] = Relationship(back_populates="charts")

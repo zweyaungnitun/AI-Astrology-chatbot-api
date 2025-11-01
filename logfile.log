@@ -1,0 +1,42 @@
+2025-10-02 11:11:17.521 +0630 [94380] FATAL:  lock file "postmaster.pid" already exists
+2025-10-02 11:11:17.521 +0630 [94380] HINT:  Is another postmaster (PID 71353) running in data directory "/Users/m24147-user/postgres_data"?
+2025-10-02 11:12:33.650 +0630 [94470] LOG:  starting PostgreSQL 17.6 on x86_64-apple-darwin13.4.0, compiled by clang version 19.1.7, 64-bit
+2025-10-02 11:12:33.652 +0630 [94470] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2025-10-02 11:12:33.653 +0630 [94470] LOG:  listening on IPv6 address "::1", port 5432
+2025-10-02 11:12:33.654 +0630 [94470] LOG:  listening on Unix socket "/tmp/.s.PGSQL.5432"
+2025-10-02 11:12:33.674 +0630 [94473] LOG:  database system was shut down at 2025-10-02 11:12:27 +0630
+2025-10-02 11:12:33.686 +0630 [94470] LOG:  database system is ready to accept connections
+2025-10-02 11:17:33.676 +0630 [94471] LOG:  checkpoint starting: time
+2025-10-02 11:17:33.682 +0630 [94471] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.001 s, total=0.007 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB; lsn=0/1A13970, redo lsn=0/1A13918
+2025-10-02 15:29:43.446 +0630 [5327] LOG:  could not receive data from client: Connection reset by peer
+2025-10-02 15:29:43.447 +0630 [5327] LOG:  unexpected EOF on client connection with an open transaction
+2025-10-02 15:31:30.142 +0630 [94471] LOG:  checkpoint starting: time
+2025-10-02 15:31:30.863 +0630 [94471] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.715 s, sync=0.002 s, total=0.722 s; sync files=5, longest=0.001 s, average=0.001 s; distance=1 kB, estimate=1 kB; lsn=0/1A13DA8, redo lsn=0/1A13D50
+2025-10-02 15:37:40.947 +0630 [5576] LOG:  could not receive data from client: Connection reset by peer
+2025-10-02 15:37:40.948 +0630 [5576] LOG:  unexpected EOF on client connection with an open transaction
+2025-10-02 15:48:08.369 +0630 [6480] ERROR:  column "test_firebase_uid_123" does not exist at character 30
+2025-10-02 15:48:08.369 +0630 [6480] STATEMENT:  DELETE FROM users WHERE id = test_firebase_uid_123;
+2025-10-02 15:48:48.118 +0630 [6480] ERROR:  column "test_firebase_uid_123" does not exist at character 40
+2025-10-02 15:48:48.118 +0630 [6480] STATEMENT:  DELETE FROM users WHERE firebase_uid = test_firebase_uid_123;
+2025-10-02 15:49:34.325 +0630 [6480] ERROR:  column "test_firebase_uid_123" does not exist at character 40
+2025-10-02 15:49:34.325 +0630 [6480] STATEMENT:  DELETE FROM users WHERE firebase_uid = "test_firebase_uid_123";
+2025-10-02 15:50:32.103 +0630 [6480] ERROR:  column "test_firebase_uid_123" does not exist at character 40
+2025-10-02 15:50:32.103 +0630 [6480] STATEMENT:  DELETE FROM users WHERE firebase_uid = test_firebase_uid_123;
+2025-10-02 15:51:30.597 +0630 [94471] LOG:  checkpoint starting: time
+2025-10-02 15:51:31.315 +0630 [94471] LOG:  checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.711 s, sync=0.002 s, total=0.719 s; sync files=6, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=1 kB; lsn=0/1A13FD8, redo lsn=0/1A13F80
+2025-10-02 15:52:40.328 +0630 [6923] LOG:  could not receive data from client: Connection reset by peer
+2025-10-02 15:52:40.328 +0630 [6923] LOG:  unexpected EOF on client connection with an open transaction
+2025-10-02 15:55:48.498 +0630 [7109] LOG:  could not receive data from client: Connection reset by peer
+2025-10-02 15:55:48.499 +0630 [7109] LOG:  unexpected EOF on client connection with an open transaction
+2025-10-02 15:56:30.303 +0630 [94471] LOG:  checkpoint starting: time
+2025-10-02 15:56:30.711 +0630 [94471] LOG:  checkpoint complete: wrote 5 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.404 s, sync=0.001 s, total=0.408 s; sync files=5, longest=0.001 s, average=0.001 s; distance=1 kB, estimate=1 kB; lsn=0/1A144E8, redo lsn=0/1A14490
+2025-10-02 16:00:57.037 +0630 [8302] LOG:  could not receive data from client: Connection reset by peer
+2025-10-02 16:00:57.038 +0630 [8302] LOG:  unexpected EOF on client connection with an open transaction
+2025-10-02 16:01:30.699 +0630 [94471] LOG:  checkpoint starting: time
+2025-10-02 16:01:31.112 +0630 [94471] LOG:  checkpoint complete: wrote 5 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.405 s, sync=0.003 s, total=0.413 s; sync files=5, longest=0.002 s, average=0.001 s; distance=1 kB, estimate=1 kB; lsn=0/1A14B00, redo lsn=0/1A14AA8
+2025-10-02 16:02:05.270 +0630 [94470] LOG:  received smart shutdown request
+2025-10-02 16:02:05.272 +0630 [94470] LOG:  background worker "logical replication launcher" (PID 94476) exited with exit code 1
+2025-10-02 16:02:05.273 +0630 [94471] LOG:  shutting down
+2025-10-02 16:02:05.273 +0630 [94471] LOG:  checkpoint starting: shutdown immediate
+2025-10-02 16:02:05.275 +0630 [94471] LOG:  checkpoint complete: wrote 0 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.001 s, sync=0.001 s, total=0.003 s; sync files=0, longest=0.000 s, average=0.000 s; distance=0 kB, estimate=1 kB; lsn=0/1A14BB0, redo lsn=0/1A14BB0
+2025-10-02 16:02:05.279 +0630 [94470] LOG:  database system is shut down

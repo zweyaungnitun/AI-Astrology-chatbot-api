@@ -52,7 +52,7 @@ class UserService:
                 return existing_user
 
             # Create new user
-            db_user = User(**user_data.dict())
+            db_user = User(**user_data.model_dump())
             self.db.add(db_user)
             await self.db.commit()
             await self.db.refresh(db_user)
@@ -78,7 +78,7 @@ class UserService:
                 return None
 
             # Update fields
-            update_dict = update_data.dict(exclude_unset=True)
+            update_dict = update_data.model_dump(exclude_unset=True)
             for field, value in update_dict.items():
                 setattr(user, field, value)
             

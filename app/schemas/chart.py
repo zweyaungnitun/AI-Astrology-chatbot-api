@@ -18,6 +18,8 @@ class ChartBase(SQLModel):
     birth_time: time
     birth_location: str
     birth_timezone: str = "UTC"
+    birth_latitude: float
+    birth_longitude: float
     house_system: HouseSystem = Field(default=HouseSystem.PLACIDUS)
     zodiac_system: ZodiacSystem = Field(default=ZodiacSystem.TROPICAL)
     ayanamsa: Optional[float] = Field(default=0.0)
@@ -65,9 +67,12 @@ class ChartCalculationRequest(SQLModel):
     birth_time: time
     birth_location: str
     birth_timezone: str = "UTC"
+    birth_latitude: Optional[float] = None
+    birth_longitude: Optional[float] = None
     house_system: HouseSystem = HouseSystem.PLACIDUS
     zodiac_system: ZodiacSystem = ZodiacSystem.TROPICAL
     ayanamsa: Optional[float] = None
+
 
 class PlanetaryPosition(SQLModel):
     """Represents the detailed position of a single celestial body."""

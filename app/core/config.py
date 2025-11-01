@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     
     # --- Database Settings (PostgreSQL) ---
     DATABASE_URL: str = Field(..., env="DATABASE_URL")
-    
+    TEST_DATABASE_URL: str = Field(..., env="TEST_DATABASE_URL")
     # --- Redis Settings ---
     REDIS_URL: str = Field(default="redis://localhost:6379", env="REDIS_URL")
     
