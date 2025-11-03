@@ -17,9 +17,10 @@ from app.services.user_service import UserService
 from app.services.chart_service import ChartService
 from app.services.chat_service import ChatService
 from app.services.admin_service import AdminService
+from app.services.ai_service import AIService
 from app.models.user import User
 from app.models.chart import Chart, ChartType, HouseSystem, ZodiacSystem
-from app.models.chat import ChatSession, ChatMessage
+from app.models.chat import ChatSession, ChatMessage, MessageRole
 from app.models.admin import AdminUser
 
 # -----------------------
@@ -37,9 +38,9 @@ def event_loop():
 # -----------------------
 @pytest_asyncio.fixture(scope="function")
 async def test_db_session() -> AsyncGenerator[AsyncSession, None]:
-    async with async_session() as session:  # ensures session tied to async loop
-        async with session.begin():  # starts a transaction
-            yield session  # run the test
+    async with async_session() as session:
+        yield session
+
 # -----------------------
 # Service Fixtures
 # -----------------------
@@ -58,6 +59,12 @@ async def admin_service(test_db_session: AsyncSession) -> AdminService:
 @pytest_asyncio.fixture(scope="function")
 async def user_service(test_db_session: AsyncSession) -> UserService:
     return UserService(test_db_session)
+
+# ✅ NEW: AI Service Fixture
+@pytest_asyncio.fixture(scope="function")
+async def ai_service() -> AIService:
+    """Provide an instance of the AIService for testing."""
+    return AIService()
 
 # -----------------------
 # HTTP Client Fixture
@@ -78,17 +85,17 @@ async def client(test_db_session: AsyncSession) -> AsyncGenerator[AsyncClient, N
 @pytest.fixture(scope="session")
 def sample_user_data() -> UserCreate:
     return UserCreate(
-        firebase_uid="test_firebase_uid_125",
-        email="test123@example.com",
+        firebase_uid="id_2",
+        email="test00@example.com",
         display_name="Test User",
         photo_url="https://example.com/photo.jpg",
         email_verified=True,
     )
 
-@pytest.fixture(scope="session")
-def sample_chart_data() -> ChartCreate:
+@pytest.fixture(scope="function")
+def sample_chart_data(created_user: User) -> ChartCreate:
     return ChartCreate(
-        user_id=uuid4(),
+        user_id=created_user.id,
         chart_type=ChartType.BIRTH_CHART,
         chart_name="Test Chart",
         birth_date=date(1990, 1, 1),

@@ -1,6 +1,7 @@
 import firebase_admin
 from firebase_admin import credentials, auth
 from firebase_admin.exceptions import FirebaseError
+from typing import Optional
 import logging
 import os
 
@@ -52,8 +53,67 @@ async def verify_firebase_token(id_token: str) -> dict:
     except Exception as e:
         raise ValueError(f"Unexpected error: {str(e)}")
 
+def create_firebase_user(
+    email: str,
+    password: str,
+    display_name: Optional[str] = None,
+    email_verified: bool = False,
+    photo_url: Optional[str] = None
+) -> dict:
+    """
+    Create a new user in Firebase Authentication.
+    
+    Args:
+        email: User's email address
+        password: User's password (will be hashed by Firebase)
+        display_name: Optional display name
+        email_verified: Whether email is verified (default: False)
+        photo_url: Optional profile photo URL
+    
+    Returns:
+        Dictionary containing user information including 'uid'
+    
+    Raises:
+        ValueError: If user creation fails (e.g., email already exists)
+    """
+    try:
+        user_record = auth.create_user(
+            email=email,
+            password=password,
+            display_name=display_name,
+            email_verified=email_verified,
+            photo_url=photo_url,
+            app=firebase_app
+        )
+        
+        logger.info(f"Created Firebase user: {email} (UID: {user_record.uid})")
+        
+        return {
+            'uid': user_record.uid,
+            'email': user_record.email,
+            'display_name': user_record.display_name,
+            'photo_url': user_record.photo_url,
+            'email_verified': user_record.email_verified
+        }
+    
+    except auth.EmailAlreadyExistsError:
+        logger.error(f"Firebase user with email {email} already exists")
+        raise ValueError(f"An account with this email already exists")
+    except auth.InvalidEmailError:
+        logger.error(f"Invalid email format: {email}")
+        raise ValueError("Invalid email format")
+    except auth.WeakPasswordError:
+        logger.error("Password is too weak")
+        raise ValueError("Password is too weak. Please use a stronger password.")
+    except FirebaseError as e:
+        logger.error(f"Firebase error creating user: {str(e)}")
+        raise ValueError(f"Failed to create user account: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error creating Firebase user: {str(e)}")
+        raise ValueError(f"An unexpected error occurred: {str(e)}")
+
 # Initialize Firebase when this module is imported
 initialize_firebase()
 
 # Export the firebase_app so it can be imported
-__all__ = ['firebase_app', 'initialize_firebase', 'verify_firebase_token']
+__all__ = ['firebase_app', 'initialize_firebase', 'verify_firebase_token', 'create_firebase_user']

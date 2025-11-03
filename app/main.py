@@ -156,6 +156,11 @@ async def root():
         "environment": settings.ENVIRONMENT,
         "docs": "/docs" if settings.IS_DEVELOPMENT else None,
         "health": "/health",
+        "public_endpoints": {
+            "register": f"{settings.API_V1_STR}/users/register",
+            "health": "/health",
+            "info": "/info"
+        }
     }
 
 @app.get("/health", tags=["Health"])

@@ -2,8 +2,26 @@ from sqlmodel import SQLModel, Field
 from typing import Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
+from pydantic import EmailStr, field_validator
 
 # --- Input Schemas ---
+
+class UserRegister(SQLModel):
+    """
+    Schema for user registration with email and password.
+    User will be created in both Firebase and the local database.
+    """
+    email: EmailStr = Field(description="User's email address")
+    password: str = Field(min_length=6, description="User's password (minimum 6 characters)")
+    display_name: Optional[str] = Field(default=None, description="User's display name")
+    photo_url: Optional[str] = Field(default=None, description="Profile photo URL")
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 6:
+            raise ValueError('Password must be at least 6 characters long')
+        return v
 
 class UserCreate(SQLModel):
     """

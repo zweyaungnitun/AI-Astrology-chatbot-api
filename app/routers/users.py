@@ -8,12 +8,97 @@ from firebase_admin import auth
 
 from app.dependencies.auth import get_current_user, require_email_verified
 from app.database.session import get_db_session
-from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserWithPreferences
+from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserWithPreferences, UserRegister
 from app.services.user_service import UserService
+from app.services.firebase_admin import create_firebase_user
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def register_user(
+    user_data: UserRegister,
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Public user registration endpoint - No authentication required.
+    
+    Allows users to create their own account by providing:
+    - Email address
+    - Password (minimum 6 characters)
+    - Optional display name and photo URL
+    
+    This endpoint will:
+    1. Create a user account in Firebase Authentication
+    2. Create a corresponding user profile in the local database
+    3. Return the created user information
+    
+    The user can immediately log in using the email and password provided.
+    Note: Email verification may be required depending on Firebase configuration.
+    
+    Returns 201 Created on success with user details.
+    Returns 400 Bad Request if email already exists or validation fails.
+    """
+    user_service = UserService(db)
+    
+    # Check if email already exists in database
+    existing_user = await user_service.get_user_by_email(user_data.email)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An account with this email already exists"
+        )
+    
+    try:
+        # Step 1: Create user in Firebase
+        firebase_user = create_firebase_user(
+            email=user_data.email,
+            password=user_data.password,
+            display_name=user_data.display_name,
+            email_verified=False,  # Email verification will be handled by Firebase
+            photo_url=user_data.photo_url
+        )
+        
+        # Step 2: Create user in local database
+        db_user_data = UserCreate(
+            firebase_uid=firebase_user['uid'],
+            email=firebase_user['email'],
+            display_name=firebase_user.get('display_name'),
+            photo_url=firebase_user.get('photo_url'),
+            email_verified=firebase_user.get('email_verified', False)
+        )
+        
+        new_user = await user_service.create_user(db_user_data)
+        
+        if not new_user:
+            # If database creation fails, try to clean up Firebase user
+            try:
+                auth.delete_user(firebase_user['uid'])
+                logger.warning(f"Cleaned up Firebase user {firebase_user['uid']} after database creation failure")
+            except Exception as cleanup_error:
+                logger.error(f"Failed to clean up Firebase user after database error: {str(cleanup_error)}")
+            
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user profile in database"
+            )
+        
+        logger.info(f"User successfully self-registered: {user_data.email} (Firebase UID: {firebase_user['uid']})")
+        return new_user
+        
+    except ValueError as e:
+        # Handle Firebase-specific errors
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during user registration: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during registration"
+        )
 
 @router.post("/sync", response_model=UserResponse)
 async def sync_user_with_firebase(
