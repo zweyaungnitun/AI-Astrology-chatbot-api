@@ -4,6 +4,7 @@ import logging
 import time
 from datetime import datetime
 import tiktoken
+import langcheck
 
 from app.core.langchain_config import astrology_chain
 from app.services.evaluation_service import evaluation_service
