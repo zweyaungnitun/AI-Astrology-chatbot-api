@@ -6,8 +6,13 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_community.chat_message_histories import RedisChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_core.tools import StructuredTool
+from langchain_core.runnables import RunnableLambda
 from typing import Optional, Dict, Any, List, AsyncGenerator
 from app.core.config import settings
+from app.services.astrology_service import AstrologyService
+from app.schemas.chart import ChartCalculationRequest, HouseSystem, ZodiacSystem
+from datetime import date, time
 import logging
 from datetime import datetime
 
@@ -52,8 +57,134 @@ def get_chat_model(temperature: float = 0.7, max_tokens: int = 500) -> ChatOpenA
         }
     )
 
+def create_astrology_tools() -> List[StructuredTool]:
+    """Create LangChain tools for astrology calculations."""
+    astrology_service = AstrologyService()
+    
+    async def calculate_chart_tool(
+        birth_date: str,
+        birth_time: str,
+        birth_location: str,
+        birth_latitude: Optional[float] = None,
+        birth_longitude: Optional[float] = None,
+        birth_timezone: Optional[str] = None,
+        house_system: Optional[str] = None,
+        zodiac_system: Optional[str] = None,
+        ayanamsa: Optional[float] = None
+    ) -> str:
+        """Calculate a birth chart with planetary positions, houses, and aspects.
+        
+        Args:
+            birth_date: Birth date in YYYY-MM-DD format
+            birth_time: Birth time in HH:MM:SS format (24-hour)
+            birth_location: Birth location (city name or coordinates)
+            birth_latitude: Optional latitude (decimal degrees)
+            birth_longitude: Optional longitude (decimal degrees)
+            birth_timezone: Timezone (default: UTC)
+            house_system: House system (placidus, koch, porphyry, equal, whole_sign)
+            zodiac_system: Zodiac system (tropical, sidereal)
+            ayanamsa: Optional ayanamsa value for sidereal calculations
+        
+        Returns:
+            JSON string with chart data including planetary positions, houses, aspects, and summary
+        """
+        try:
+            # Parse date and time
+            birth_date_obj = datetime.strptime(birth_date, "%Y-%m-%d").date()
+            time_parts = birth_time.split(":")
+            birth_time_obj = time(
+                int(time_parts[0]),
+                int(time_parts[1]) if len(time_parts) > 1 else 0,
+                int(time_parts[2]) if len(time_parts) > 2 else 0
+            )
+            
+            # Map house system
+            house_system_map = {
+                "placidus": HouseSystem.PLACIDUS,
+                "koch": HouseSystem.KOCH,
+                "porphyry": HouseSystem.PORPHYRY,
+                "equal": HouseSystem.EQUAL,
+                "whole_sign": HouseSystem.WHOLE_SIGN
+            }
+            
+            # Map zodiac system
+            zodiac_system_map = {
+                "tropical": ZodiacSystem.TROPICAL,
+                "sidereal": ZodiacSystem.SIDEREAL
+            }
+            
+            request = ChartCalculationRequest(
+                birth_date=birth_date_obj,
+                birth_time=birth_time_obj,
+                birth_location=birth_location,
+                birth_latitude=birth_latitude,
+                birth_longitude=birth_longitude,
+                birth_timezone=birth_timezone or "UTC",
+                house_system=house_system_map.get(house_system or "placidus", HouseSystem.PLACIDUS),
+                zodiac_system=zodiac_system_map.get(zodiac_system or "tropical", ZodiacSystem.TROPICAL),
+                ayanamsa=ayanamsa
+            )
+            
+            result = await astrology_service.calculate_chart(request)
+            
+            # Format result as readable string
+            import json
+            return json.dumps(result, indent=2)
+            
+        except Exception as e:
+            logger.error(f"Error in calculate_chart_tool: {str(e)}")
+            return f"Error calculating chart: {str(e)}"
+    
+    async def parse_location_tool(location_str: str) -> str:
+        """Parse a location string and return coordinates.
+        
+        Args:
+            location_str: Location name (e.g., "New York") or coordinates (e.g., "40.7128,-74.0060")
+        
+        Returns:
+            JSON string with latitude, longitude, and place name
+        """
+        try:
+            lat, lon, place_name = astrology_service.parse_location(location_str)
+            import json
+            return json.dumps({
+                "latitude": lat,
+                "longitude": lon,
+                "place_name": place_name
+            })
+        except Exception as e:
+            logger.error(f"Error in parse_location_tool: {str(e)}")
+            return f"Error parsing location: {str(e)}"
+    
+    tools = [
+        StructuredTool.from_function(
+            func=calculate_chart_tool,
+            name="calculate_birth_chart",
+            description="""Calculate a complete birth chart including:
+            - Planetary positions (Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, Rahu, Ketu)
+            - House positions (12 houses)
+            - Planetary aspects (conjunctions, oppositions, trines, squares, sextiles)
+            - Chart summary
+            
+            Use this tool when the user provides birth information (date, time, location) and wants a chart calculation.
+            Always use this tool before providing astrological interpretations based on birth data."""
+        ),
+        StructuredTool.from_function(
+            func=parse_location_tool,
+            name="parse_location",
+            description="""Parse a location string to get latitude and longitude coordinates.
+            Accepts city names (e.g., 'New York', 'London') or coordinate strings (e.g., '40.7128,-74.0060').
+            Use this when you need to convert a location name to coordinates for chart calculations."""
+        )
+    ]
+    
+    return tools
+
 def create_astrology_chain() -> RunnablePassthrough:
-    """Create LangChain chain for astrology conversations."""
+    """Create LangChain chain for astrology conversations with tool calling."""
+    # Get astrology tools
+    tools = create_astrology_tools()
+    
     # System prompt template
     system_template = """
     You are Stella, an expert astrologer with deep knowledge of Western astrology. 
@@ -66,8 +197,8 @@ def create_astrology_chain() -> RunnablePassthrough:
     - Birth Time: {{ birth_data.birth_time }}
     - Birth Location: {{ birth_data.birth_location }}
     
-    Use this birth data as the absolute basis for your astrological interpretations.
-    Be specific about planetary positions, houses, and aspects.
+    You have access to birth chart calculation tools. When users ask about their chart,
+    use the calculate_birth_chart tool to get accurate planetary positions, houses, and aspects.
     {% else %}
     ## Important: No Birth Data Available
     If the user asks astrological questions without providing birth data,
@@ -76,11 +207,13 @@ def create_astrology_chain() -> RunnablePassthrough:
     {% endif %}
 
     ## Guidelines:
-    1. Be accurate and don't make up planetary positions
-    2. Focus on practical, empowering insights
-    3. Avoid fatalistic or deterministic language
-    4. Encourage self-reflection and personal agency
-    5. Be culturally sensitive and inclusive
+    1. Always use the calculate_birth_chart tool when birth data is available and the user asks about their chart
+    2. Be accurate and don't make up planetary positions - use the tools to get real data
+    3. Focus on practical, empowering insights based on actual chart calculations
+    4. Avoid fatalistic or deterministic language
+    5. Encourage self-reflection and personal agency
+    6. Be culturally sensitive and inclusive
+    7. When interpreting charts, reference specific planetary positions, houses, and aspects from the tool results
 
     Current Date: {{ current_date }}
     """
@@ -91,7 +224,10 @@ def create_astrology_chain() -> RunnablePassthrough:
         ("human", "{user_input}"),
     ])
     
-    # Create the chain
+    # Create model with tools
+    model_with_tools = get_chat_model().bind_tools(tools)
+    
+    # Create the chain with tool calling
     chain = (
         RunnablePassthrough.assign(
             current_date=lambda x: datetime.now().strftime("%Y-%m-%d"),
@@ -99,8 +235,7 @@ def create_astrology_chain() -> RunnablePassthrough:
             chat_history=lambda x: x.get("chat_history", [])
         )
         | prompt
-        | get_chat_model()
-        | StrOutputParser()
+        | model_with_tools
     )
     
     return chain

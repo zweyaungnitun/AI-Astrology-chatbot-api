@@ -14,7 +14,6 @@ class UserRegister(SQLModel):
     email: EmailStr = Field(description="User's email address")
     password: str = Field(min_length=6, description="User's password (minimum 6 characters)")
     display_name: Optional[str] = Field(default=None, description="User's display name")
-    photo_url: Optional[str] = Field(default=None, description="Profile photo URL")
     
     @field_validator('password')
     @classmethod
@@ -31,8 +30,9 @@ class UserCreate(SQLModel):
     firebase_uid: str
     email: str
     display_name: Optional[str] = None
-    photo_url: Optional[str] = None
     email_verified: bool = False
+    is_active: bool = True
+    subscription_tier: str = "free"  # <-- Add this line
 
 class UserUpdate(SQLModel):
     """
@@ -41,7 +41,6 @@ class UserUpdate(SQLModel):
     All fields are optional.
     """
     display_name: Optional[str] = None
-    photo_url: Optional[str] = None
     preferences: Optional[Dict[str, Any]] = None
     birth_date: Optional[str] = None
     birth_time: Optional[str] = None
@@ -62,8 +61,6 @@ class UserResponse(SQLModel):
     is_active: bool
     subscription_tier: str
     display_name: Optional[str] = None
-    photo_url: Optional[str] = None
-    has_birth_data: bool = Field(description="Computed field: True if user has provided birth data")
     created_at: datetime
     updated_at: datetime
     last_login_at: Optional[datetime] = None

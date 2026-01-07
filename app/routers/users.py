@@ -56,8 +56,7 @@ async def register_user(
             email=user_data.email,
             password=user_data.password,
             display_name=user_data.display_name,
-            email_verified=False,  # Email verification will be handled by Firebase
-            photo_url=user_data.photo_url
+            email_verified=False  # Email verification will be handled by Firebase
         )
         
         # Step 2: Create user in local database
@@ -65,7 +64,6 @@ async def register_user(
             firebase_uid=firebase_user['uid'],
             email=firebase_user['email'],
             display_name=firebase_user.get('display_name'),
-            photo_url=firebase_user.get('photo_url'),
             email_verified=firebase_user.get('email_verified', False)
         )
         
@@ -113,6 +111,11 @@ async def sync_user_with_firebase(
     
     existing_user = await user_service.get_user_by_firebase_uid(firebase_user['uid'])
     if existing_user:
+        if existing_user.id is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="User record is missing an ID"
+            )
         updated_user = await user_service.update_login_stats(existing_user.id)
         return updated_user
     
@@ -120,7 +123,6 @@ async def sync_user_with_firebase(
         firebase_uid=firebase_user['uid'],
         email=firebase_user.get('email', ''),
         display_name=firebase_user.get('name'),
-        photo_url=firebase_user.get('picture'),
         email_verified=firebase_user.get('email_verified', False)
     )
     
@@ -165,6 +167,11 @@ async def update_current_user_profile(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User profile not found"
         )
+    if user.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User record is missing an ID"
+        )
     
     updated_user = await user_service.update_user(user.id, update_data)
     if not updated_user:
@@ -198,7 +205,11 @@ async def update_user_birth_data(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Missing required field: {field}"
             )
-    
+    if user.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User record is missing an ID"
+        )
     updated_user = await user_service.update_birth_data(
         user.id,
         birth_data['birth_date'],
@@ -228,7 +239,11 @@ async def get_user_birth_data(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User profile not found"
         )
-    
+    if user.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User record is missing an ID"
+        )
     birth_data = await user_service.get_birth_data(user.id)
     if not birth_data:
         raise HTTPException(
@@ -240,9 +255,9 @@ async def get_user_birth_data(
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user_account(
+    background_tasks: BackgroundTasks,
     firebase_user: Dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
-    background_tasks: BackgroundTasks = None
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Delete the user's account and all associated data."""
     user_service = UserService(db)
@@ -253,7 +268,11 @@ async def delete_user_account(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User profile not found"
         )
-    
+    if user.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User record is missing an ID"
+        )
     # First deactivate the user
     await user_service.deactivate_user(user.id)
     

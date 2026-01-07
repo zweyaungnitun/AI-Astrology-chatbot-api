@@ -17,7 +17,6 @@ class User(SQLModel, table=True):
     is_active: bool = Field(default=True, description="Whether user account is active")
     subscription_tier: str = Field(default="free", description="User's subscription level")
     display_name: Optional[str] = Field(default=None, description="User's display name")
-    photo_url: Optional[str] = Field(default=None, description="Profile photo URL")
     
     # Birth data (should be encrypted in a real application)
     birth_date: Optional[str] = Field(default=None, description="Encrypted birth date")
