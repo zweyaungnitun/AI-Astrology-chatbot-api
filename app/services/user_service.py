@@ -1,5 +1,5 @@
 # app/services/user_service.py
-from sqlmodel import select, update, delete
+from sqlmodel import func, select, update, delete
 from sqlmodel.ext.asyncio.session import AsyncSession
 from typing import Optional, Dict, Any, List
 from uuid import UUID
@@ -18,8 +18,9 @@ class UserService:
     async def get_user_by_id(self, user_id: UUID) -> Optional[User]:
         """Get user by their internal UUID."""
         try:
-            result = await self.db.exec(select(User).where(User.id == user_id))
-            return result.first()
+            statement = select(User).where(User.id == user_id)
+            result = await self.db.execute(statement)
+            return result.scalar_one_or_none()
         except Exception as e:
             logger.error(f"Error getting user by ID {user_id}: {str(e)}")
             return None
@@ -27,8 +28,9 @@ class UserService:
     async def get_user_by_firebase_uid(self, firebase_uid: str) -> Optional[User]:
         """Get user by their Firebase UID."""
         try:
-            result = await self.db.exec(select(User).where(User.firebase_uid == firebase_uid))
-            return result.first()
+            statement = select(User).where(User.firebase_uid == firebase_uid)
+            result = await self.db.execute(statement)
+            return result.scalar_one_or_none()
         except Exception as e:
             logger.error(f"Error getting user by Firebase UID {firebase_uid}: {str(e)}")
             return None
@@ -36,8 +38,9 @@ class UserService:
     async def get_user_by_email(self, email: str) -> Optional[User]:
         """Get user by email address."""
         try:
-            result = await self.db.exec(select(User).where(User.email == email))
-            return result.first()
+            statement = select(User).where(User.email == email)
+            result = await self.db.execute(statement)
+            return result.scalar_one_or_none()
         except Exception as e:
             logger.error(f"Error getting user by email {email}: {str(e)}")
             return None
@@ -54,6 +57,7 @@ class UserService:
             # Create new user
             db_user = User(**user_data.model_dump())
             self.db.add(db_user)
+            await self.db.flush()  # Flush to get the ID without committing
             await self.db.commit()
             await self.db.refresh(db_user)
             
@@ -142,16 +146,19 @@ class UserService:
             if not user:
                 return False
 
-            await self.db.exec(delete(User).where(User.id == user_id))
+            # Use delete statement for async session
+            statement = delete(User).where(User.id == user_id)
+            await self.db.execute(statement)
             await self.db.commit()
-            
+
             logger.info(f"Deleted user {user_id}")
             return True
-            
+
         except Exception as e:
             await self.db.rollback()
             logger.error(f"Error deleting user {user_id}: {str(e)}")
             return False
+
 
     async def update_birth_data(
         self, 
@@ -191,9 +198,9 @@ class UserService:
                 return None
 
             return {
-                "birth_date": decrypt_data(user.birth_date),
-                "birth_time": decrypt_data(user.birth_time),
-                "birth_location": decrypt_data(user.birth_location)
+                "birth_date": decrypt_data(user.birth_date or ""),
+                "birth_time": decrypt_data(user.birth_time or ""),
+                "birth_location": decrypt_data(user.birth_location or "")
             }
             
         except Exception as e:
@@ -213,8 +220,9 @@ class UserService:
                 query = query.where(User.is_active == True)
             
             query = query.offset(skip).limit(limit)
-            result = await self.db.exec(query)
-            return result.all()
+            result = await self.db.execute(query)
+            users = result.scalars().all()
+            return list(users) if users else []
             
         except Exception as e:
             logger.error(f"Error listing users: {str(e)}")
@@ -228,18 +236,28 @@ class UserService:
     async def get_user_stats(self) -> Dict[str, int]:
         """Get user statistics."""
         try:
-            total_users = await self.db.exec(select(User))
-            active_users = await self.db.exec(select(User).where(User.is_active == True))
-            users_with_birth_data = await self.db.exec(
-                select(User).where(User.birth_date.is_not(None))
+            # total users
+            res = await self.db.execute(select(func.count()).select_from(User))
+            total_users = int(res.scalar_one())
+
+            # active users
+            res = await self.db.execute(
+                select(func.count()).select_from(User).where(User.is_active == True)
             )
-            
+            active_users = int(res.scalar_one())
+
+            # users with birth data: treat NULL as missing; if you store empty string, use `!= ""` instead
+            res = await self.db.execute(
+                select(func.count()).select_from(User).where(User.birth_date != None)  # generates IS NOT NULL
+            )
+            users_with_birth_data = int(res.scalar_one())
+
             return {
-                "total_users": len(total_users.all()),
-                "active_users": len(active_users.all()),
-                "users_with_birth_data": len(users_with_birth_data.all()),
+                "total_users": total_users,
+                "active_users": active_users,
+                "users_with_birth_data": users_with_birth_data,
             }
-            
+
         except Exception as e:
             logger.error(f"Error getting user stats: {str(e)}")
             return {}

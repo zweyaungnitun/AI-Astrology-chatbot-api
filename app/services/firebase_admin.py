@@ -58,7 +58,6 @@ def create_firebase_user(
     password: str,
     display_name: Optional[str] = None,
     email_verified: bool = False,
-    photo_url: Optional[str] = None
 ) -> dict:
     """
     Create a new user in Firebase Authentication.
@@ -82,7 +81,6 @@ def create_firebase_user(
             password=password,
             display_name=display_name,
             email_verified=email_verified,
-            photo_url=photo_url,
             app=firebase_app
         )
         
@@ -92,19 +90,13 @@ def create_firebase_user(
             'uid': user_record.uid,
             'email': user_record.email,
             'display_name': user_record.display_name,
-            'photo_url': user_record.photo_url,
             'email_verified': user_record.email_verified
         }
     
     except auth.EmailAlreadyExistsError:
         logger.error(f"Firebase user with email {email} already exists")
         raise ValueError(f"An account with this email already exists")
-    except auth.InvalidEmailError:
-        logger.error(f"Invalid email format: {email}")
-        raise ValueError("Invalid email format")
-    except auth.WeakPasswordError:
-        logger.error("Password is too weak")
-        raise ValueError("Password is too weak. Please use a stronger password.")
+    
     except FirebaseError as e:
         logger.error(f"Firebase error creating user: {str(e)}")
         raise ValueError(f"Failed to create user account: {str(e)}")
