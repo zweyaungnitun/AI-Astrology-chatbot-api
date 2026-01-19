@@ -9,11 +9,17 @@ from firebase_admin.exceptions import FirebaseError
 
 # Import your Firebase app instance
 from app.services.firebase_admin import firebase_app
+from app.core.logging_config import get_logger, get_request_id, log_error
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # HTTP Bearer scheme for extracting tokens from Authorization header
-security = HTTPBearer(auto_error=False)
+# auto_error=False allows us to handle errors manually for better control
+security = HTTPBearer(
+    auto_error=False,
+    scheme_name="Bearer",
+    description="Firebase ID Token - Enter your token (without 'Bearer' prefix)"
+)
 
 async def verify_firebase_token(id_token: str) -> Dict[str, Any]:
     """
@@ -78,12 +84,16 @@ async def get_token_from_header(
     """
     # First try the HTTPBearer dependency
     if credentials and credentials.scheme.lower() == "bearer":
+        logger.debug(f"Token extracted via HTTPBearer: {credentials.credentials[:20]}..." if credentials.credentials else "None")
         return credentials.credentials
     
     # Fallback: manually parse Authorization header
     if authorization and authorization.startswith("Bearer "):
-        return authorization.replace("Bearer ", "").strip()
+        token = authorization.replace("Bearer ", "").strip()
+        logger.debug(f"Token extracted via manual parsing: {token[:20]}..." if token else "None")
+        return token
     
+    logger.debug("No token found in Authorization header")
     return None
 
 async def get_current_user(
@@ -103,24 +113,58 @@ async def get_current_user(
     Raises:
         HTTPException: 401 if authentication fails
     """
-    if not token:
-        logger.warning("No authentication token provided")
+    request_id = get_request_id()
+    
+    if not token or (isinstance(token, str) and not token.strip()):
+        logger.warning(
+            "No authentication token provided",
+            extra={
+                "extra_fields": {
+                    "request_id": request_id,
+                    "auth_error": "missing_token",
+                }
+            }
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required. Please provide a valid Firebase ID token.",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Authentication failed: No token provided. Please provide a valid authentication token.",
+            headers={"WWW-Authenticate": "Bearer", "X-Request-ID": request_id} if request_id else {"WWW-Authenticate": "Bearer"},
         )
     
     try:
         decoded_token = await verify_firebase_token(token)
+        
+        # Log successful authentication (debug level to avoid noise)
+        logger.debug(
+            f"Authentication successful for user: {decoded_token.get('uid')}",
+            extra={
+                "extra_fields": {
+                    "request_id": request_id,
+                    "user_id": decoded_token.get('uid'),
+                    "email": decoded_token.get('email'),
+                }
+            }
+        )
+        
         return decoded_token
         
     except ValueError as e:
-        logger.warning(f"Token verification failed: {str(e)}")
+        # Log authentication failure with context
+        log_error(
+            logger,
+            e,
+            context={
+                "request_id": request_id,
+                "auth_error": "token_verification_failed",
+                "error_type": type(e).__name__,
+            },
+            level=logging.WARNING
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Authentication failed: {str(e)}",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail=f"Authentication failed: {str(e)}",  
+            headers={"WWW-Authenticate": "Bearer", "X-Request-ID": request_id} if request_id else {"WWW-Authenticate": "Bearer"},
         )
 
 async def get_optional_user(

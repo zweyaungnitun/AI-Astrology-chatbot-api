@@ -18,8 +18,8 @@ class ChartBase(SQLModel):
     birth_time: time
     birth_location: str
     birth_timezone: str = "UTC"
-    birth_latitude: float
-    birth_longitude: float
+    birth_latitude: Optional[float] = Field(default=None, description="Latitude. If not provided, will be parsed from birth_location")
+    birth_longitude: Optional[float] = Field(default=None, description="Longitude. If not provided, will be parsed from birth_location")
     house_system: HouseSystem = Field(default=HouseSystem.PLACIDUS)
     zodiac_system: ZodiacSystem = Field(default=ZodiacSystem.TROPICAL)
     ayanamsa: Optional[float] = Field(default=0.0)

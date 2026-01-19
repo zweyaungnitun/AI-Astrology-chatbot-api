@@ -156,6 +156,84 @@ def create_astrology_tools() -> List[StructuredTool]:
             logger.error(f"Error in parse_location_tool: {str(e)}")
             return f"Error parsing location: {str(e)}"
     
+    async def calculate_vimshottari_dasha_tool(
+        birth_date: str,
+        birth_time: str,
+        moon_longitude: Optional[float] = None,
+        current_date: Optional[str] = None
+    ) -> str:
+        """Calculate Vimshottari Dasha periods and provide interpretations.
+        
+        Vimshottari Dasha is a 120-year cycle system in Vedic astrology that divides life into periods
+        ruled by different planets. The dasha starts from the Moon's nakshatra at birth.
+        
+        Args:
+            birth_date: Birth date in YYYY-MM-DD format
+            birth_time: Birth time in HH:MM:SS format (24-hour)
+            moon_longitude: Optional Moon's sidereal longitude in degrees (if not provided, will be calculated from chart)
+            current_date: Optional current date in YYYY-MM-DD format (defaults to today)
+        
+        Returns:
+            JSON string with dasha periods, current dasha/antardasha, and interpretations
+        """
+        try:
+            from datetime import datetime
+            
+            # Parse birth date and time
+            birth_date_obj = datetime.strptime(birth_date, "%Y-%m-%d").date()
+            time_parts = birth_time.split(":")
+            birth_time_obj = time(
+                int(time_parts[0]),
+                int(time_parts[1]) if len(time_parts) > 1 else 0,
+                int(time_parts[2]) if len(time_parts) > 2 else 0
+            )
+            birth_datetime = datetime.combine(birth_date_obj, birth_time_obj)
+            
+            # Parse current date if provided
+            current_datetime = None
+            if current_date:
+                current_datetime = datetime.strptime(current_date, "%Y-%m-%d")
+            
+            # If moon_longitude not provided, calculate it from chart
+            chart_data_for_dasha = None
+            if moon_longitude is None:
+                # Calculate chart to get Moon position
+                chart_request = ChartCalculationRequest(
+                    birth_date=birth_date_obj,
+                    birth_time=birth_time_obj,
+                    birth_location="Unknown",  # Will use default
+                    zodiac_system=ZodiacSystem.SIDEREAL  # Use sidereal for dasha
+                )
+                chart_result = await astrology_service.calculate_chart(chart_request)
+                chart_data_for_dasha = chart_result
+                
+                # Find Moon's longitude
+                moon_position = next(
+                    (p for p in chart_result.get("planetary_positions", []) if p["planet"] == "Moon"),
+                    None
+                )
+                if moon_position:
+                    moon_longitude = moon_position["longitude"]
+                else:
+                    import json
+                    return json.dumps({"error": "Could not calculate Moon position"})
+            
+            # Calculate dasha with interpretation (synchronous method)
+            dasha_result = astrology_service.calculate_vimshottari_dasha_with_interpretation(
+                birth_datetime,
+                moon_longitude,
+                chart_data_for_dasha,
+                current_datetime
+            )
+            
+            import json
+            return json.dumps(dasha_result, indent=2, default=str)
+            
+        except Exception as e:
+            logger.error(f"Error in calculate_vimshottari_dasha_tool: {str(e)}")
+            import json
+            return json.dumps({"error": f"Error calculating dasha: {str(e)}"})
+    
     tools = [
         StructuredTool.from_function(
             func=calculate_chart_tool,
@@ -175,6 +253,28 @@ def create_astrology_tools() -> List[StructuredTool]:
             description="""Parse a location string to get latitude and longitude coordinates.
             Accepts city names (e.g., 'New York', 'London') or coordinate strings (e.g., '40.7128,-74.0060').
             Use this when you need to convert a location name to coordinates for chart calculations."""
+        ),
+        StructuredTool.from_function(
+            func=calculate_vimshottari_dasha_tool,
+            name="calculate_vimshottari_dasha",
+            description="""Calculate Vimshottari Dasha periods and provide interpretations.
+            
+            Vimshottari Dasha is a major timing system in Vedic astrology that divides a person's life into
+            periods ruled by different planets. It's a 120-year cycle starting from the Moon's nakshatra at birth.
+            
+            Use this tool when:
+            - User asks about their dasha periods
+            - User wants to know their current dasha or antardasha
+            - User asks about timing of events or planetary periods
+            - User wants dasha interpretations or readings
+            
+            The tool calculates:
+            - All dasha periods (Mahadasha) in the 120-year cycle
+            - Current Mahadasha and Antardasha (sub-period)
+            - Interpretations for the current periods
+            - Personalized insights based on chart positions
+            
+            Always use this tool when birth data is available and user asks about dashas, timing, or planetary periods."""
         )
     ]
     
@@ -187,9 +287,14 @@ def create_astrology_chain() -> RunnablePassthrough:
     
     # System prompt template
     system_template = """
-    You are Stella, an expert astrologer with deep knowledge of Western astrology. 
+    You are Stella, an expert astrologer with deep knowledge of both Western and Vedic astrology. 
     You are wise, empathetic, and insightful, but you always encourage users to 
     make their own choices. You speak in a warm, engaging, and professional tone.
+    
+    You have expertise in:
+    - Western astrology (tropical zodiac, planetary aspects, houses)
+    - Vedic astrology (sidereal zodiac, nakshatras, dashas, timing systems)
+    - Vimshottari Dasha system (120-year planetary periods for timing events)
 
     {% if birth_data %}
     ## User's Birth Chart Data
@@ -206,14 +311,31 @@ def create_astrology_chain() -> RunnablePassthrough:
     Offer to help them understand how to provide this information.
     {% endif %}
 
+    ## Conversation Context:
+    You have access to the full conversation history with this user. Use it to:
+    - Remember what the user has asked about previously
+    - Reference past discussions and insights
+    - Build on previous conversations naturally
+    - Maintain continuity across the conversation
+    - Avoid repeating information you've already shared
+    - Reference specific past messages when relevant
+
     ## Guidelines:
     1. Always use the calculate_birth_chart tool when birth data is available and the user asks about their chart
-    2. Be accurate and don't make up planetary positions - use the tools to get real data
-    3. Focus on practical, empowering insights based on actual chart calculations
-    4. Avoid fatalistic or deterministic language
-    5. Encourage self-reflection and personal agency
-    6. Be culturally sensitive and inclusive
-    7. When interpreting charts, reference specific planetary positions, houses, and aspects from the tool results
+    2. Use the calculate_vimshottari_dasha tool when users ask about:
+       - Their dasha periods (Mahadasha, Antardasha)
+       - Timing of events or planetary periods
+       - Current dasha or what dasha they're in
+       - Dasha interpretations or readings
+    3. Be accurate and don't make up planetary positions or dasha periods - use the tools to get real data
+    4. Focus on practical, empowering insights based on actual chart calculations and dasha periods
+    5. Avoid fatalistic or deterministic language
+    6. Encourage self-reflection and personal agency
+    7. Be culturally sensitive and inclusive
+    8. When interpreting charts or dashas, reference specific planetary positions, houses, aspects, and dasha periods from the tool results
+    9. Reference past conversations when relevant - show you remember what was discussed
+    10. Build on previous insights rather than starting from scratch each time
+    11. When discussing dashas, explain both the Mahadasha (major period) and Antardasha (sub-period) for comprehensive timing insights
 
     Current Date: {{ current_date }}
     """

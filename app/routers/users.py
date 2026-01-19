@@ -64,6 +64,7 @@ async def register_user(
             firebase_uid=firebase_user['uid'],
             email=firebase_user['email'],
             display_name=firebase_user.get('display_name'),
+            photo_url=firebase_user.get('photo_url'),
             email_verified=firebase_user.get('email_verified', False)
         )
         
@@ -123,6 +124,7 @@ async def sync_user_with_firebase(
         firebase_uid=firebase_user['uid'],
         email=firebase_user.get('email', ''),
         display_name=firebase_user.get('name'),
+        photo_url=firebase_user.get('picture'),
         email_verified=firebase_user.get('email_verified', False)
     )
     
@@ -255,9 +257,8 @@ async def get_user_birth_data(
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user_account(
-    background_tasks: BackgroundTasks,
     firebase_user: Dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
 ):
     """Delete the user's account and all associated data."""
     user_service = UserService(db)

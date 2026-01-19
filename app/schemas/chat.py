@@ -24,6 +24,10 @@ class ChatSessionCreate(SQLModel):
     """Schema for creating a new chat session."""
     title: Optional[str] = "New Chat"
 
+class ChatSessionUpdate(SQLModel):
+    """Schema for updating a chat session."""
+    title: Optional[str] = None
+
 class ChatSessionResponse(SQLModel):
     """Schema for returning basic chat session info in an API response."""
     id: UUID
