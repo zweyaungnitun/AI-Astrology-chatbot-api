@@ -2,19 +2,19 @@ from sqlmodel import SQLModel, Field
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
-
+from pydantic import BaseModel
 # Import enums from the models to ensure consistency
 from app.models.admin import AdminRole, AdminPermission
 
 # --- Input Schemas ---
 
-class AdminUserCreate(SQLModel):
+class AdminUserCreate(BaseModel):
     """Schema for creating a new admin user."""
     user_id: UUID
     role: AdminRole = AdminRole.MODERATOR
     permissions: List[AdminPermission] = Field(default_factory=list)
 
-class AdminUserUpdate(SQLModel):
+class AdminUserUpdate(BaseModel):
     """Schema for updating an existing admin user's details."""
     role: Optional[AdminRole] = None
     is_active: Optional[bool] = None
@@ -22,7 +22,7 @@ class AdminUserUpdate(SQLModel):
 
 # --- Output Schemas ---
 
-class AdminUserResponse(SQLModel):
+class AdminUserResponse(BaseModel):
     """Schema for returning admin user information in an API response."""
     id: UUID
     user_id: UUID

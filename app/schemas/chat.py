@@ -1,18 +1,21 @@
-from sqlmodel import SQLModel, Field
-from typing import Optional, List, Any
+from pydantic import BaseModel, Field
+from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
+
 from app.models.chat import MessageRole
 
-# --- Chat Schemas ---
 
-class ChatMessageCreate(SQLModel):
+class ChatMessageCreate(BaseModel):
     """Schema for creating a new chat message."""
     content: str
     role: MessageRole = MessageRole.USER
 
-class ChatMessageResponse(SQLModel):
+
+class ChatMessageResponse(BaseModel):
     """Schema for returning a chat message in an API response."""
+    model_config = {"from_attributes": True}
+
     id: UUID
     role: MessageRole
     content: str
@@ -20,16 +23,25 @@ class ChatMessageResponse(SQLModel):
     tokens: Optional[int] = None
     model: Optional[str] = None
 
-class ChatSessionCreate(SQLModel):
-    """Schema for creating a new chat session."""
-    title: Optional[str] = "New Chat"
 
-class ChatSessionUpdate(SQLModel):
+# ---------------------------------------------------------------------
+# Chat Session Schemas
+# ---------------------------------------------------------------------
+
+class ChatSessionCreate(BaseModel):
+    """Schema for creating a new chat session."""
+    title: Optional[str] = Field(default="New Chat")
+
+
+class ChatSessionUpdate(BaseModel):
     """Schema for updating a chat session."""
     title: Optional[str] = None
 
-class ChatSessionResponse(SQLModel):
+
+class ChatSessionResponse(BaseModel):
     """Schema for returning basic chat session info in an API response."""
+    model_config = {"from_attributes": True}
+
     id: UUID
     title: str
     is_active: bool
@@ -37,18 +49,25 @@ class ChatSessionResponse(SQLModel):
     created_at: datetime
     updated_at: datetime
 
+
 class ChatSessionWithMessages(ChatSessionResponse):
     """Extends ChatSessionResponse to include associated messages."""
-    messages: List[ChatMessageResponse] = Field(default_factory=list)
+    messages: List[ChatMessageResponse]
 
-class ChatRequest(SQLModel):
+
+# ---------------------------------------------------------------------
+# Chat Interaction Schemas
+# ---------------------------------------------------------------------
+
+class ChatRequest(BaseModel):
     """Schema for a user's request to the main chat endpoint."""
     message: str
     chat_session_id: Optional[UUID] = None
-    temperature: Optional[float] = 0.7
-    max_tokens: Optional[int] = 500
+    temperature: float = 0.7
+    max_tokens: int = 500
 
-class ChatResponse(SQLModel):
+
+class ChatResponse(BaseModel):
     """Schema for the AI's response from the chat endpoint."""
     message: ChatMessageResponse
     chat_session: ChatSessionResponse
