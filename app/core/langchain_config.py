@@ -1,4 +1,7 @@
 import os
+import asyncio
+from typing import Optional, Dict, Any, List, Type
+from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough, RunnableConfig
@@ -8,15 +11,16 @@ from langchain_community.chat_message_histories import RedisChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.tools import StructuredTool
 from langchain_core.runnables import RunnableLambda
-from typing import Optional, Dict, Any, List, AsyncGenerator
+from datetime import date, datetime
+import logging
+import json
+
 from app.core.config import settings
 from app.services.astrology_service import AstrologyService
 from app.schemas.chart import ChartCalculationRequest, HouseSystem, ZodiacSystem
-from datetime import date, time
-import logging
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
 
 def configure_langsmith():
     """Configure LangSmith for tracing and monitoring."""
@@ -39,9 +43,11 @@ class AstrologyCallbackHandler(AsyncCallbackHandler):
     
     async def on_llm_end(self, response, **kwargs: Any) -> None:
         """Run when LLM ends."""
-        logger.info(f"LLM completed: {response.generations[0][0].text[:100]}...")
+        if response.generations:
+            text = response.generations[0][0].text
+            logger.info(f"LLM completed: {text[:100]}...")
 
-def get_chat_model(temperature: float = 0.7, max_tokens: int = 500) -> ChatOpenAI:
+def get_chat_model(temperature: float = 0.7, max_tokens: int = 8000) -> ChatOpenAI:
     """Get configured LangChain chat model."""
     return ChatOpenAI(
         model=settings.OPENROUTER_MODEL,
@@ -57,96 +63,62 @@ def get_chat_model(temperature: float = 0.7, max_tokens: int = 500) -> ChatOpenA
         }
     )
 
+class ChartArgs(BaseModel):
+    birth_date: str = Field(description="Birth date in YYYY-MM-DD format")
+    birth_time: str = Field(description="Birth time in HH:MM:SS format (24-hour)")
+    birth_location: str = Field(description="Birth location (city name)")
+    birth_timezone: Optional[str] = Field(default="UTC", description="Timezone (e.g., UTC)")
+
+class LocationArgs(BaseModel):
+    location_str: str = Field(description="City name or coordinates to parse")
+
+class DashaArgs(BaseModel):
+    birth_date: str = Field(description="Birth date in YYYY-MM-DD format")
+    birth_time: str = Field(description="Birth time in HH:MM:SS format (24-hour)")
+    current_date: Optional[str] = Field(default=None, description="Target date for prediction (YYYY-MM-DD)")
+
 def create_astrology_tools() -> List[StructuredTool]:
     """Create LangChain tools for astrology calculations."""
     astrology_service = AstrologyService()
     
-    async def calculate_chart_tool(
-        birth_date: str,
-        birth_time: str,
-        birth_location: str,
-        birth_latitude: Optional[float] = None,
-        birth_longitude: Optional[float] = None,
-        birth_timezone: Optional[str] = None,
-        house_system: Optional[str] = None,
-        zodiac_system: Optional[str] = None,
-        ayanamsa: Optional[float] = None
+    
+    async def calculate_chart_impl(
+        birth_date: str, 
+        birth_time: str, 
+        birth_location: str, 
+        birth_timezone: str = "UTC",
+        **kwargs
     ) -> str:
-        """Calculate a birth chart with planetary positions, houses, and aspects.
-        
-        Args:
-            birth_date: Birth date in YYYY-MM-DD format
-            birth_time: Birth time in HH:MM:SS format (24-hour)
-            birth_location: Birth location (city name or coordinates)
-            birth_latitude: Optional latitude (decimal degrees)
-            birth_longitude: Optional longitude (decimal degrees)
-            birth_timezone: Timezone (default: UTC)
-            house_system: House system (placidus, koch, porphyry, equal, whole_sign)
-            zodiac_system: Zodiac system (tropical, sidereal)
-            ayanamsa: Optional ayanamsa value for sidereal calculations
-        
-        Returns:
-            JSON string with chart data including planetary positions, houses, aspects, and summary
-        """
+        """Async implementation of calculate_chart."""
         try:
-            # Parse date and time
-            birth_date_obj = datetime.strptime(birth_date, "%Y-%m-%d").date()
-            time_parts = birth_time.split(":")
-            birth_time_obj = time(
-                int(time_parts[0]),
-                int(time_parts[1]) if len(time_parts) > 1 else 0,
-                int(time_parts[2]) if len(time_parts) > 2 else 0
-            )
-            
-            # Map house system
-            house_system_map = {
-                "placidus": HouseSystem.PLACIDUS,
-                "koch": HouseSystem.KOCH,
-                "porphyry": HouseSystem.PORPHYRY,
-                "equal": HouseSystem.EQUAL,
-                "whole_sign": HouseSystem.WHOLE_SIGN
-            }
-            
-            # Map zodiac system
-            zodiac_system_map = {
-                "tropical": ZodiacSystem.TROPICAL,
-                "sidereal": ZodiacSystem.SIDEREAL
-            }
-            
+            # Parse date
+            b_date = datetime.strptime(birth_date, "%Y-%m-%d").date()
+            # Parse time (handle seconds or no seconds)
+            try:
+                b_time = datetime.strptime(birth_time, "%H:%M:%S").time()
+            except ValueError:
+                b_time = datetime.strptime(birth_time, "%H:%M").time()
+
             request = ChartCalculationRequest(
-                birth_date=birth_date_obj,
-                birth_time=birth_time_obj,
+                birth_date=b_date,
+                birth_time=b_time,
                 birth_location=birth_location,
-                birth_latitude=birth_latitude,
-                birth_longitude=birth_longitude,
-                birth_timezone=birth_timezone or "UTC",
-                house_system=house_system_map.get(house_system or "placidus", HouseSystem.PLACIDUS),
-                zodiac_system=zodiac_system_map.get(zodiac_system or "tropical", ZodiacSystem.TROPICAL),
-                ayanamsa=ayanamsa
+                birth_timezone=birth_timezone,
+                house_system=HouseSystem.PLACIDUS,
+                zodiac_system=ZodiacSystem.TROPICAL
             )
             
             result = await astrology_service.calculate_chart(request)
-            
-            # Format result as readable string
-            import json
-            return json.dumps(result, indent=2)
+            return json.dumps(result, indent=2, default=str)
             
         except Exception as e:
             logger.error(f"Error in calculate_chart_tool: {str(e)}")
             return f"Error calculating chart: {str(e)}"
-    
-    async def parse_location_tool(location_str: str) -> str:
-        """Parse a location string and return coordinates.
-        
-        Args:
-            location_str: Location name (e.g., "New York") or coordinates (e.g., "40.7128,-74.0060")
-        
-        Returns:
-            JSON string with latitude, longitude, and place name
-        """
+
+    async def parse_location_impl(location_str: str, **kwargs) -> str:
+        """Async implementation of parse_location."""
         try:
             lat, lon, place_name = astrology_service.parse_location(location_str)
-            import json
             return json.dumps({
                 "latitude": lat,
                 "longitude": lon,
@@ -155,138 +127,89 @@ def create_astrology_tools() -> List[StructuredTool]:
         except Exception as e:
             logger.error(f"Error in parse_location_tool: {str(e)}")
             return f"Error parsing location: {str(e)}"
-    
-    async def calculate_vimshottari_dasha_tool(
-        birth_date: str,
-        birth_time: str,
-        moon_longitude: Optional[float] = None,
-        current_date: Optional[str] = None
+
+    async def calculate_dasha_impl(
+        birth_date: str, 
+        birth_time: str, 
+        current_date: Optional[str] = None,
+        **kwargs
     ) -> str:
-        """Calculate Vimshottari Dasha periods and provide interpretations.
-        
-        Vimshottari Dasha is a 120-year cycle system in Vedic astrology that divides life into periods
-        ruled by different planets. The dasha starts from the Moon's nakshatra at birth.
-        
-        Args:
-            birth_date: Birth date in YYYY-MM-DD format
-            birth_time: Birth time in HH:MM:SS format (24-hour)
-            moon_longitude: Optional Moon's sidereal longitude in degrees (if not provided, will be calculated from chart)
-            current_date: Optional current date in YYYY-MM-DD format (defaults to today)
-        
-        Returns:
-            JSON string with dasha periods, current dasha/antardasha, and interpretations
-        """
+        """Async implementation of calculate_vimshottari_dasha."""
         try:
-            from datetime import datetime
+            b_date = datetime.strptime(birth_date, "%Y-%m-%d").date()
+            try:
+                b_time = datetime.strptime(birth_time, "%H:%M:%S").time()
+            except ValueError:
+                b_time = datetime.strptime(birth_time, "%H:%M").time()
             
-            # Parse birth date and time
-            birth_date_obj = datetime.strptime(birth_date, "%Y-%m-%d").date()
-            time_parts = birth_time.split(":")
-            birth_time_obj = time(
-                int(time_parts[0]),
-                int(time_parts[1]) if len(time_parts) > 1 else 0,
-                int(time_parts[2]) if len(time_parts) > 2 else 0
-            )
-            birth_datetime = datetime.combine(birth_date_obj, birth_time_obj)
+            birth_datetime = datetime.combine(b_date, b_time)
             
-            # Parse current date if provided
             current_datetime = None
             if current_date:
                 current_datetime = datetime.strptime(current_date, "%Y-%m-%d")
+            chart_req = ChartCalculationRequest(
+                birth_date=b_date,
+                birth_time=b_time,
+                birth_location="Unknown",
+                zodiac_system=ZodiacSystem.SIDEREAL 
+            )
+            chart_result = await astrology_service.calculate_chart(chart_req)
             
-            # If moon_longitude not provided, calculate it from chart
-            chart_data_for_dasha = None
-            if moon_longitude is None:
-                # Calculate chart to get Moon position
-                chart_request = ChartCalculationRequest(
-                    birth_date=birth_date_obj,
-                    birth_time=birth_time_obj,
-                    birth_location="Unknown",  # Will use default
-                    zodiac_system=ZodiacSystem.SIDEREAL  # Use sidereal for dasha
-                )
-                chart_result = await astrology_service.calculate_chart(chart_request)
-                chart_data_for_dasha = chart_result
-                
-                # Find Moon's longitude
-                moon_position = next(
-                    (p for p in chart_result.get("planetary_positions", []) if p["planet"] == "Moon"),
-                    None
-                )
-                if moon_position:
-                    moon_longitude = moon_position["longitude"]
-                else:
-                    import json
-                    return json.dumps({"error": "Could not calculate Moon position"})
+            moon_position = next(
+                (p for p in chart_result.get("planetary_positions", []) if p["planet"] == "Moon"),
+                None
+            )
             
-            # Calculate dasha with interpretation (synchronous method)
+            if not moon_position:
+                return json.dumps({"error": "Could not calculate Moon position"})
+            
+            moon_longitude = moon_position["longitude"]
+            
             dasha_result = astrology_service.calculate_vimshottari_dasha_with_interpretation(
                 birth_datetime,
                 moon_longitude,
-                chart_data_for_dasha,
+                chart_result,
                 current_datetime
             )
             
-            import json
             return json.dumps(dasha_result, indent=2, default=str)
             
         except Exception as e:
             logger.error(f"Error in calculate_vimshottari_dasha_tool: {str(e)}")
-            import json
             return json.dumps({"error": f"Error calculating dasha: {str(e)}"})
-    
-    tools = [
+    def sync_placeholder(*args, **kwargs):
+        """Placeholder for sync execution which shouldn't happen in this async app."""
+        raise NotImplementedError("This tool is async-only. Use ainvoke().")
+    return [
         StructuredTool.from_function(
-            func=calculate_chart_tool,
+            func=sync_placeholder,
+            coroutine=calculate_chart_impl,
             name="calculate_birth_chart",
-            description="""Calculate a complete birth chart including:
-            - Planetary positions (Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, Rahu, Ketu)
-            - House positions (12 houses)
-            - Planetary aspects (conjunctions, oppositions, trines, squares, sextiles)
-            - Chart summary
-            
-            Use this tool when the user provides birth information (date, time, location) and wants a chart calculation.
-            Always use this tool before providing astrological interpretations based on birth data."""
+            description="Calculate a complete birth chart including planetary positions and houses.",
+            args_schema=ChartArgs
         ),
         StructuredTool.from_function(
-            func=parse_location_tool,
+            func=sync_placeholder,
+            coroutine=parse_location_impl,
             name="parse_location",
-            description="""Parse a location string to get latitude and longitude coordinates.
-            Accepts city names (e.g., 'New York', 'London') or coordinate strings (e.g., '40.7128,-74.0060').
-            Use this when you need to convert a location name to coordinates for chart calculations."""
+            description="Parse a location string to get latitude and longitude coordinates.",
+            args_schema=LocationArgs
         ),
         StructuredTool.from_function(
-            func=calculate_vimshottari_dasha_tool,
+            func=sync_placeholder,
+            coroutine=calculate_dasha_impl,
             name="calculate_vimshottari_dasha",
-            description="""Calculate Vimshottari Dasha periods and provide interpretations.
-            
-            Vimshottari Dasha is a major timing system in Vedic astrology that divides a person's life into
-            periods ruled by different planets. It's a 120-year cycle starting from the Moon's nakshatra at birth.
-            
-            Use this tool when:
-            - User asks about their dasha periods
-            - User wants to know their current dasha or antardasha
-            - User asks about timing of events or planetary periods
-            - User wants dasha interpretations or readings
-            
-            The tool calculates:
-            - All dasha periods (Mahadasha) in the 120-year cycle
-            - Current Mahadasha and Antardasha (sub-period)
-            - Interpretations for the current periods
-            - Personalized insights based on chart positions
-            
-            Always use this tool when birth data is available and user asks about dashas, timing, or planetary periods."""
+            description="Calculate Vedic Vimshottari Dasha periods for timing and prediction.",
+            args_schema=DashaArgs
         )
     ]
-    
-    return tools
 
 def create_astrology_chain() -> RunnablePassthrough:
     """Create LangChain chain for astrology conversations with tool calling."""
-    # Get astrology tools
+
     tools = create_astrology_tools()
-    
-    # System prompt template
-    system_template = """
+   
+    base_system_template = """
     You are Stella, an expert astrologer with deep knowledge of both Western and Vedic astrology. 
     You are wise, empathetic, and insightful, but you always encourage users to 
     make their own choices. You speak in a warm, engaging, and professional tone.
@@ -296,65 +219,140 @@ def create_astrology_chain() -> RunnablePassthrough:
     - Vedic astrology (sidereal zodiac, nakshatras, dashas, timing systems)
     - Vimshottari Dasha system (120-year planetary periods for timing events)
 
-    {% if birth_data %}
-    ## User's Birth Chart Data
-    - Birth Date: {{ birth_data.birth_date }}
-    - Birth Time: {{ birth_data.birth_time }}
-    - Birth Location: {{ birth_data.birth_location }}
-    
-    You have access to birth chart calculation tools. When users ask about their chart,
-    use the calculate_birth_chart tool to get accurate planetary positions, houses, and aspects.
-    {% else %}
-    ## Important: No Birth Data Available
-    If the user asks astrological questions without providing birth data,
-    gently explain that you need their birth information for accurate readings.
-    Offer to help them understand how to provide this information.
-    {% endif %}
+    {birth_data_section}
 
     ## Conversation Context:
-    You have access to the full conversation history with this user. Use it to:
-    - Remember what the user has asked about previously
-    - Reference past discussions and insights
-    - Build on previous conversations naturally
-    - Maintain continuity across the conversation
-    - Avoid repeating information you've already shared
-    - Reference specific past messages when relevant
+    You have access to the full conversation history. Use it to maintain continuity.
 
     ## Guidelines:
-    1. Always use the calculate_birth_chart tool when birth data is available and the user asks about their chart
-    2. Use the calculate_vimshottari_dasha tool when users ask about:
-       - Their dasha periods (Mahadasha, Antardasha)
-       - Timing of events or planetary periods
-       - Current dasha or what dasha they're in
-       - Dasha interpretations or readings
-    3. Be accurate and don't make up planetary positions or dasha periods - use the tools to get real data
-    4. Focus on practical, empowering insights based on actual chart calculations and dasha periods
-    5. Avoid fatalistic or deterministic language
-    6. Encourage self-reflection and personal agency
-    7. Be culturally sensitive and inclusive
-    8. When interpreting charts or dashas, reference specific planetary positions, houses, aspects, and dasha periods from the tool results
-    9. Reference past conversations when relevant - show you remember what was discussed
-    10. Build on previous insights rather than starting from scratch each time
-    11. When discussing dashas, explain both the Mahadasha (major period) and Antardasha (sub-period) for comprehensive timing insights
+    1. **PRIORITY: If chart_data is available in context, ALWAYS use it instead of recalculating.**
+    2. Use the 'calculate_vimshottari_dasha' tool when users ask about timing, future predictions, or dasha periods.
+    3. Be accurate and don't make up planetary positions - use the provided chart_data or tools.
+    4. Focus on practical, empowering insights.
+    5. When discussing dashas, explain both the Mahadasha (major) and Antardasha (sub) periods.
 
-    Current Date: {{ current_date }}
+    Current Date: {current_date}
     """
     
     prompt = ChatPromptTemplate.from_messages([
-        ("system", system_template),
+        ("system", base_system_template),
         MessagesPlaceholder(variable_name="chat_history"),
         ("human", "{user_input}"),
     ])
     
-    # Create model with tools
-    model_with_tools = get_chat_model().bind_tools(tools)
+    # Bind tools with auto choice to help the model decide
+    model_with_tools = get_chat_model().bind_tools(tools, tool_choice="auto")
     
-    # Create the chain with tool calling
+    # Helper to format birth data
+    def format_birth_data_section(context: Dict[str, Any]) -> str:
+        """Format birth data section based on available data."""
+        birth_data = context.get("birth_data")
+        chart_data = context.get("chart_data")
+        
+        sections = []
+        
+        if birth_data and isinstance(birth_data, dict):
+            sections.append(f"""## User's Birth Data
+            - Birth Date: {birth_data.get('birth_date', 'Not provided')}
+            - Birth Time: {birth_data.get('birth_time', 'Not provided')}
+            - Birth Location: {birth_data.get('birth_location', 'Not provided')}""")
+        
+        if chart_data and isinstance(chart_data, dict):
+            chart_name = chart_data.get('chart_name', 'Chart')
+            chart_type = chart_data.get('chart_type', 'birth_chart')
+            summary = chart_data.get('summary', '')
+            planetary_positions = chart_data.get('planetary_positions', {})
+            house_positions = chart_data.get('house_positions', {})
+            aspects = chart_data.get('aspects', [])
+            
+            chart_section = f"""## User's Uploaded Chart: {chart_name} ({chart_type})
+            This chart has been uploaded to this chat session and contains COMPLETE astrological data for reference.
+
+            ### Chart Configuration:
+            - Birth Date: {chart_data.get('birth_date', 'Not provided')}
+            - Birth Time: {chart_data.get('birth_time', 'Not provided')}
+            - Birth Location: {chart_data.get('birth_location', 'Not provided')}
+            - Birth Timezone: {chart_data.get('birth_timezone', 'Not provided')}
+            - House System: {chart_data.get('house_system', 'Not provided')}
+            - Zodiac System: {chart_data.get('zodiac_system', 'Not provided')}
+            - Ayanamsa: {chart_data.get('ayanamsa', 'Not provided')}
+            - Is Primary Chart: {chart_data.get('is_primary', False)}"""
+            
+            if summary:
+                chart_section += f"\n\n### Chart Summary:\n{summary}"
+ 
+            if planetary_positions:
+                chart_section += "\n\n### PLANETARY POSITIONS (Complete Chart Data):"
+                
+                if isinstance(planetary_positions, list):
+                    for planet in planetary_positions:
+                        planet_name = planet.get('planet', 'Unknown')
+                        sign = planet.get('sign', 'Unknown')
+                        degree = planet.get('degree', 0)
+                        house = planet.get('house', 0)
+                        retrograde = planet.get('retrograde', False)
+                        retro_str = " (R)" if retrograde else ""
+                        chart_section += f"\n- {planet_name}: {sign} {degree:.2f}° (House {house}){retro_str}"
+                elif isinstance(planetary_positions, dict):
+                  
+                    for planet_name, planet_data in planetary_positions.items():
+                        if isinstance(planet_data, dict):
+                            sign = planet_data.get('sign', 'Unknown')
+                            degree = planet_data.get('degree', 0)
+                            house = planet_data.get('house', 0)
+                            retrograde = planet_data.get('retrograde', False)
+                            retro_str = " (R)" if retrograde else ""
+                            chart_section += f"\n- {planet_name}: {sign} {degree:.2f}° (House {house}){retro_str}"
+                        else:
+                            chart_section += f"\n- {planet_name}: {planet_data}"
+
+            if house_positions:
+                chart_section += "\n\n### HOUSE POSITIONS (Complete Chart Data):"
+                if isinstance(house_positions, list):
+                    for house in house_positions:
+                        house_num = house.get('house', 0)
+                        sign = house.get('sign', 'Unknown')
+                        degree = house.get('degree', 0)
+                        chart_section += f"\n- House {house_num}: {sign} {degree:.2f}°"
+                elif isinstance(house_positions, dict):
+                    for house_num, house_data in sorted(house_positions.items()):
+                        if isinstance(house_data, dict):
+                            sign = house_data.get('sign', 'Unknown')
+                            degree = house_data.get('degree', 0)
+                            chart_section += f"\n- House {house_num}: {sign} {degree:.2f}°"
+                        else:
+                            chart_section += f"\n- House {house_num}: {house_data}"
+            
+            if aspects:
+                aspect_count = len(aspects) if isinstance(aspects, list) else 0
+                chart_section += f"\n\n### PLANETARY ASPECTS (Complete Chart Data - {aspect_count} aspects):"
+                max_major_aspects = 20
+                if isinstance(aspects, list):
+                    for aspect in aspects[:max_major_aspects]:
+                        planet1 = aspect.get('planet1', aspect.get('from', 'Unknown'))
+                        planet2 = aspect.get('planet2', aspect.get('to', 'Unknown'))
+                        aspect_type = aspect.get('aspect_type', aspect.get('aspect', aspect.get('type', 'conjunction')))
+                        orb = aspect.get('orb', aspect.get('orb_degrees', 0))
+                        chart_section += f"\n- {planet1} {aspect_type} {planet2} (orb: {orb:.2f}°)"
+                    if aspect_count > max_major_aspects:
+                        chart_section += f"\n- ... and {aspect_count - max_major_aspects} more aspects (see chart_data for complete list)"
+            
+            sections.append(chart_section)
+        
+        if sections:
+            return "\n\n".join(sections) + "\n\nYou have access to birth chart calculation tools if needed, but prefer using the uploaded chart data when available."
+        else:
+            return """## Important: No Birth Data or Chart Available
+If the user asks astrological questions without providing birth data or uploading a chart,
+gently explain that you need their birth information for accurate readings.
+Offer to help them understand how to provide this information or upload a chart."""
+
     chain = (
         RunnablePassthrough.assign(
             current_date=lambda x: datetime.now().strftime("%Y-%m-%d"),
-            birth_data=lambda x: x.get("birth_data"),
-            chat_history=lambda x: x.get("chat_history", [])
+            birth_data_section=lambda x: format_birth_data_section(x),
+            chat_history=lambda x: x.get("chat_history", []),
+            chart_data=lambda x: x.get("chart_data")
         )
         | prompt
         | model_with_tools
@@ -362,5 +360,4 @@ def create_astrology_chain() -> RunnablePassthrough:
     
     return chain
 
-# Global chain instance
 astrology_chain = create_astrology_chain()
